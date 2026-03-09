@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.0
+ * VERSION: v1.2.1
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal.
@@ -180,29 +180,18 @@ function App() {
     });
   }, []);
 
-  if (authChecking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="text-gray-600 dark:text-gray-400">Carregando...</div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
-  }
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_FILTROS);
       if (stored) {
         const parsed = JSON.parse(stored);
-        setFiltrosHome({
+        setFiltrosHome((prev) => ({
+          ...prev,
           produtos: Array.isArray(parsed.produtos) ? parsed.produtos : DEFAULT_FILTROS.produtos,
           motivos: Array.isArray(parsed.motivos) ? parsed.motivos : DEFAULT_FILTROS.motivos,
           dataInicio: parsed.dataInicio || DEFAULT_FILTROS.dataInicio,
           dataFim: parsed.dataFim ?? DEFAULT_FILTROS.dataFim,
-        });
+        }));
       }
     } catch (_) {}
   }, []);
@@ -242,15 +231,15 @@ function App() {
   }, [filtrosHome]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadStats();
-  }, [loadStats]);
+  }, [loadStats, isAuthenticated]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadStats();
-    }, POLL_INTERVAL_MS);
+    if (!isAuthenticated) return;
+    const interval = setInterval(() => loadStats(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [loadStats]);
+  }, [loadStats, isAuthenticated]);
 
   useEffect(() => {
     if (!modalAberto) return;
@@ -268,6 +257,18 @@ function App() {
     document.addEventListener('click', h);
     return () => document.removeEventListener('click', h);
   }, []);
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="text-gray-600 dark:text-gray-400">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900">
