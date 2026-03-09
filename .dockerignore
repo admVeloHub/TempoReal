@@ -1,0 +1,15 @@
+# Build apenas backend - ignorar frontend e outros
+node_modules
+backend/node_modules
+src
+public
+*.log
+.git
+.gitignore
+.env
+.env.*
+DEPLOY_LOG.md
+LISTA_SCHEMAS.rb
+PROMPT_*.md
+postcss.config.js
+tailwind.config.js
