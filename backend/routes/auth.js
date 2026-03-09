@@ -21,7 +21,7 @@ function initAuthRoutes(connectToMongo) {
     if (funcionario.afastado === true) return { ok: false, error: 'Usuário afastado' };
     if (funcionario.suspenso === true) return { ok: false, error: 'Usuário suspenso' };
     const acessos = funcionario.acessos || {};
-    const tempoReal = acessos.tempoReal || acessos.TempoReal || false;
+    const tempoReal = acessos.tempoReal || acessos.TempoReal || acessos.realTime || acessos.RealTime || false;
     if (!tempoReal) {
       return { ok: false, error: 'Acesso ao Painel Tempo Real não autorizado. Contate o administrador.' };
     }
