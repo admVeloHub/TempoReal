@@ -18,3 +18,12 @@
 
 ### Descrição
 Push inicial do Painel Reclamações Tempo Real para o repositório admVeloHub/TempoReal. Inclui sistema de login (email/senha e Google OAuth), filtros dinâmicos, dashboard de reclamações em tempo real e proteção de rotas por sessão.
+
+---
+
+## Branch realtime-api (deploy backend separado)
+
+**Data/Hora:** 2025-03-05  
+**Branch:** realtime-api  
+
+Backend na raiz para deploy separado no Vercel. Ver branch `realtime-api` no repositório.
