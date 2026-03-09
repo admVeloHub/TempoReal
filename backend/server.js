@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Backend
- * VERSION: v1.1.0
+ * VERSION: v1.2.0
  *
  * Servidor Express com auth e GET /api/stats (protegido por sessão).
  */
@@ -40,16 +40,24 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, status: 'running' });
 });
 
-app.listen(PORT, async () => {
-  console.log(`Painel Reclamações Backend rodando na porta ${PORT}`);
-  if (MONGODB_URI) {
-    try {
-      await connectToMongo();
-      console.log('MongoDB conectado');
-    } catch (err) {
-      console.error('Erro ao conectar MongoDB:', err.message);
+const startServer = () => {
+  app.listen(PORT, async () => {
+    console.log(`Painel Reclamações Backend rodando na porta ${PORT}`);
+    if (MONGODB_URI) {
+      try {
+        await connectToMongo();
+        console.log('MongoDB conectado');
+      } catch (err) {
+        console.error('Erro ao conectar MongoDB:', err.message);
+      }
+    } else {
+      console.warn('MONGODB_URI não definida - /api/stats retornará 503');
     }
-  } else {
-    console.warn('MONGODB_URI não definida - /api/stats retornará 503');
-  }
-});
+  });
+};
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer, connectToMongo, PORT };
