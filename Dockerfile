@@ -11,7 +11,7 @@ COPY postcss.config.js tailwind.config.js ./
 COPY public/ ./public/
 COPY src/ ./src/
 
-RUN npm ci
+RUN npm install
 ENV REACT_APP_API_URL=
 RUN npm run build
 
