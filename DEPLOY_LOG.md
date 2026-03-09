@@ -27,3 +27,12 @@ Push inicial do Painel Reclamações Tempo Real para o repositório admVeloHub/T
 **Branch:** realtime-api  
 
 Backend na raiz para deploy separado no Vercel. Ver branch `realtime-api` no repositório.
+
+---
+
+## Cloud Run - Docker
+
+**Data/Hora:** 2025-03-09  
+**Branch:** main  
+
+Backend com Docker para deploy no GCP Cloud Run. Projeto unificado em main (frontend + backend). `backend/Dockerfile`, `backend/.dockerignore`, `backend/cloudbuild.yaml`. uuid v13 com dynamic import. Deploy: `cd backend && gcloud builds submit --config=cloudbuild.yaml .`

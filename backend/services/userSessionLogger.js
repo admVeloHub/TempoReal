@@ -1,10 +1,10 @@
 /**
  * User Session Logger - Painel Tempo Real
- * VERSION: v1.0.0
+ * VERSION: v1.0.1
  * Log de sessões em console_conteudo.hub_sessions
+ * uuid v13+ é ESM: usa dynamic import.
  */
 
-const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_ENV;
@@ -32,6 +32,7 @@ class UserSessionLogger {
   async logLogin(colaboradorNome, userEmail, ipAddress = null, userAgent = null) {
     try {
       await this.connect();
+      const { v4: uuidv4 } = await import('uuid');
       const sessionId = uuidv4();
       const now = new Date();
       const session = {
