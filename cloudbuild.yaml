@@ -1,11 +1,11 @@
-# Cloud Build - Deploy para Cloud Run
+# Cloud Build - Deploy Backend para Cloud Run
 # VERSION: v1.0.0
-# Uso: gcloud builds submit --config=cloudbuild.yaml .
-# Configure: _SERVICE_NAME, _REGION, _PROJECT_ID
+# Uso (na raiz do repo): gcloud builds submit --config=cloudbuild.yaml .
+# O Dockerfile está em backend/ - contexto de build = backend/
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA', '.']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA', '-f', 'backend/Dockerfile', 'backend']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA']
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

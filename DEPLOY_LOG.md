@@ -35,4 +35,4 @@ Backend na raiz para deploy separado no Vercel. Ver branch `realtime-api` no rep
 **Data/Hora:** 2025-03-09  
 **Branch:** main  
 
-Backend com Docker para deploy no GCP Cloud Run. Projeto unificado em main (frontend + backend). `backend/Dockerfile`, `backend/.dockerignore`, `backend/cloudbuild.yaml`. uuid v13 com dynamic import. Deploy: `cd backend && gcloud builds submit --config=cloudbuild.yaml .`
+Backend com Docker para deploy no GCP Cloud Run. Projeto unificado em main (frontend + backend). `backend/Dockerfile`, `backend/.dockerignore`, `cloudbuild.yaml` (raiz). uuid v13 com dynamic import. Deploy (na raiz): `gcloud builds submit --config=cloudbuild.yaml .`
