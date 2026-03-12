@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.6.2
+ * VERSION: v1.6.3
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  */
@@ -178,6 +178,8 @@ function initStatsRoutes(connectToMongo) {
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
 
+      console.log('[STATS_FILTROS]', { filtroBacen: JSON.stringify(filtroBacen), filtroN2: JSON.stringify(filtroN2), filtroRA: JSON.stringify(filtroReclameAqui), filtroProcon: JSON.stringify(filtroProcon) });
+
       const [bacen, n2Pix, reclameAquiDocs, proconDocs] = await Promise.all([
         db.collection('reclamacoes_bacen').find(filtroBacen).toArray(),
         db.collection('reclamacoes_n2Pix').find(filtroN2).toArray(),
@@ -194,6 +196,12 @@ function initStatsRoutes(connectToMongo) {
         Procon: calcularStatsPorTipo(proconDocs),
         Total: calcularStatsPorTipo(todas),
       };
+
+      console.log('[STATS_RESULT]', JSON.stringify({
+        filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },
+        docsRetornados: { bacen: bacen.length, n2: n2Pix.length, ra: reclameAquiDocs.length, procon: proconDocs.length, total: todas.length },
+        porTipo,
+      }));
 
       res.json({
         success: true,

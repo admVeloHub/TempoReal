@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v1.0.14
+ * VERSION: v1.0.15
  * 
  * Componente de cards baseado no DashboardOuvidoria do VeloHub.
  * Filtros ocultos (aplicados no backend): dataInicio 2026-01-01, produto Credito Pessoal.
@@ -13,6 +13,9 @@ const BARRAS_PIX_TEMPO_REAL = ['Total', 'Reclame Aqui', 'Bacen', 'Procon', 'N2']
 const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', filtrosHome }) => {
   const statsData = stats?.data || stats || {};
   const porTipo = statsData.porTipo || {};
+  if (Object.keys(porTipo).length > 0) {
+    console.log('[DASHBOARD_DISPLAY]', { filtrosHome, porTipo });
+  }
 
   const CORES = {
     N2: '#1694FF',

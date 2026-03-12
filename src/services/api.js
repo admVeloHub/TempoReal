@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.2.0
+ * VERSION: v1.2.1
  */
 
 import { API_BASE_URL } from '../config';
@@ -20,6 +20,7 @@ export async function fetchStats(params = {}) {
   if (params.produtos?.length) qs.set('produto', params.produtos.join(','));
   if (params.motivos?.length) qs.set('motivo', params.motivos.join(','));
   const url = `${API_BASE_URL}/api/stats${qs.toString() ? '?' + qs.toString() : ''}`;
+  console.log('[STATS_REQUEST]', { params, url });
   const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) {
     throw new Error(`Erro ${response.status}: ${response.statusText}`);
@@ -28,6 +29,7 @@ export async function fetchStats(params = {}) {
   if (!data.success) {
     throw new Error(data.message || 'Erro ao buscar estatísticas');
   }
+  console.log('[STATS_RESPONSE]', { porTipo: data?.data?.porTipo });
   return data;
 }
 
