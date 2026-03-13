@@ -1,34 +1,49 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.6.3
+ * VERSION: v1.7.1
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
+ *
+ * Campos de data para filtro (LISTA_SCHEMAS.rb):
+ * - Bacen: dataEntrada (não usar createdAt)
+ * - N2: dataEntradaN2
+ * - Reclame Aqui: dataReclam
+ * - Procon: dataProcon
+ *
+ * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
  */
 
 const express = require('express');
 const router = express.Router();
 
-function normalizarMotivoParaComparacao(motivoReduzido) {
-  if (!motivoReduzido) return '';
-  if (Array.isArray(motivoReduzido)) {
-    return motivoReduzido.join(' ').toLowerCase();
-  }
-  if (typeof motivoReduzido === 'string') {
-    return motivoReduzido.toLowerCase();
-  }
-  return '';
+const MOTIVO_LIBERACAO_CHAVE_PIX = 'liberação chave pix';
+const MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO = 'liberacao chave pix';
+
+/**
+ * motivoReduzido sempre tratado como array. Verifica se algum item é exatamente "Liberação Chave Pix".
+ */
+function motivoContemLiberacaoChavePix(motivoReduzido) {
+  const itens = Array.isArray(motivoReduzido)
+    ? motivoReduzido
+    : motivoReduzido != null && motivoReduzido !== ''
+      ? [String(motivoReduzido)]
+      : [];
+  return itens.some(
+    (item) =>
+      String(item).trim().toLowerCase() === MOTIVO_LIBERACAO_CHAVE_PIX ||
+      String(item).trim().toLowerCase() === MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO
+  );
 }
 
-function isMotivoLiberacaoPix(motivoReduzido) {
-  const norm = normalizarMotivoParaComparacao(motivoReduzido);
-  return (norm.includes('liberação') && norm.includes('pix')) ||
-         (norm.includes('liberacao') && norm.includes('pix'));
-}
-
-function isMotivoLiberacaoChavePix(motivoReduzido) {
-  const norm = normalizarMotivoParaComparacao(motivoReduzido);
-  return norm.includes('liberação chave pix') || norm.includes('liberacao chave pix');
-}
+/**
+ * Campos de data por coleção (LISTA_SCHEMAS.rb). NÃO usar createdAt para Bacen/N2/RA/Procon.
+ */
+const CAMPOS_DATA_POR_COLLECTION = {
+  reclamacoes_bacen: 'dataEntrada',
+  reclamacoes_n2Pix: 'dataEntradaN2',
+  reclamacoes_reclameAqui: 'dataReclam',
+  reclamacoes_procon: 'dataProcon',
+};
 
 function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
   if (!dataInicio && !dataFim) return {};
@@ -38,17 +53,9 @@ function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
   const condicoesDataFim = dataFimDate ? { $lte: dataFimDate } : {};
   const condicoesData = { ...condicoesDataInicio, ...condicoesDataFim };
 
-  if (collectionName === 'reclamacoes_bacen') {
-    return { dataEntrada: { $exists: true, $ne: null, ...condicoesData } };
-  }
-  if (collectionName === 'reclamacoes_n2Pix') {
-    return { dataEntradaN2: { $exists: true, $ne: null, ...condicoesData } };
-  }
-  if (collectionName === 'reclamacoes_reclameAqui') {
-    return { dataReclam: { $exists: true, $ne: null, ...condicoesData } };
-  }
-  if (collectionName === 'reclamacoes_procon') {
-    return { dataProcon: { $exists: true, $ne: null, ...condicoesData } };
+  const campoData = CAMPOS_DATA_POR_COLLECTION[collectionName];
+  if (campoData) {
+    return { [campoData]: { $exists: true, $ne: null, ...condicoesData } };
   }
   return { createdAt: condicoesData };
 }
@@ -100,12 +107,17 @@ function calcularStatsPorTipo(docs) {
     (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
   )).length;
 
-  const docsLiberacaoPix = docs.filter(r => isMotivoLiberacaoPix(r.motivoReduzido));
-  const pixLiberado = docsLiberacaoPix.filter(r => r.pixLiberado === true || ['Liberado', 'Excluído', 'Solicitada'].includes(r.pixStatus)).length;
-  const pixRetido = docsLiberacaoPix.filter(r => r.pixLiberado === false).length;
-  const percRetencao = docsLiberacaoPix.length > 0 ? Math.round((pixRetido / docsLiberacaoPix.length) * 1000) / 10 : 0;
+  const solLiberacao = docs.filter((r) => motivoContemLiberacaoChavePix(r.motivoReduzido)).length;
 
-  const solLiberacao = docs.filter(r => isMotivoLiberacaoChavePix(r.motivoReduzido)).length;
+  const docsLiberacaoChavePix = docs.filter((r) => motivoContemLiberacaoChavePix(r.motivoReduzido));
+  const pixLiberado = docs.filter((r) => r.pixLiberado === true).length;
+  const pixRetido = docsLiberacaoChavePix.filter(
+    (r) => r.Finalizado?.Resolvido === true && r.pixLiberado === false
+  ).length;
+  const percRetencao =
+    docsLiberacaoChavePix.length > 0
+      ? Math.round((pixRetido / docsLiberacaoChavePix.length) * 1000) / 10
+      : 0;
 
   const taxaResolucao = ocorrencias > 0 ? Math.round((resolvido / ocorrencias) * 1000) / 10 : 0;
 
@@ -178,7 +190,15 @@ function initStatsRoutes(connectToMongo) {
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
 
-      console.log('[STATS_FILTROS]', { filtroBacen: JSON.stringify(filtroBacen), filtroN2: JSON.stringify(filtroN2), filtroRA: JSON.stringify(filtroReclameAqui), filtroProcon: JSON.stringify(filtroProcon) });
+      console.log('[STATS_FILTROS]', {
+        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon' },
+        dataInicio: dataInicioRaw,
+        dataFim: dataFimRaw || '(hoje)',
+        filtroBacen: JSON.stringify(filtroBacen),
+        filtroN2: JSON.stringify(filtroN2),
+        filtroRA: JSON.stringify(filtroReclameAqui),
+        filtroProcon: JSON.stringify(filtroProcon),
+      });
 
       const [bacen, n2Pix, reclameAquiDocs, proconDocs] = await Promise.all([
         db.collection('reclamacoes_bacen').find(filtroBacen).toArray(),
@@ -197,9 +217,17 @@ function initStatsRoutes(connectToMongo) {
         Total: calcularStatsPorTipo(todas),
       };
 
+      const pixLiberadoPorTipo = {
+        bacen: bacen.filter((r) => r.pixLiberado === true).length,
+        n2: n2Pix.filter((r) => r.pixLiberado === true).length,
+        ra: reclameAquiDocs.filter((r) => r.pixLiberado === true).length,
+        procon: proconDocs.filter((r) => r.pixLiberado === true).length,
+        total: todas.filter((r) => r.pixLiberado === true).length,
+      };
       console.log('[STATS_RESULT]', JSON.stringify({
         filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },
         docsRetornados: { bacen: bacen.length, n2: n2Pix.length, ra: reclameAquiDocs.length, procon: proconDocs.length, total: todas.length },
+        pixLiberadoNoPeriodo: pixLiberadoPorTipo,
         porTipo,
       }));
 
@@ -219,10 +247,10 @@ function initStatsRoutes(connectToMongo) {
   });
 
   const CONFIG_AUXILIAR = {
-    ra: { collection: 'reclamacoes_reclameAqui', dateField: 'dataReclam' },
-    bacen: { collection: 'reclamacoes_bacen', dateField: 'dataEntrada' },
-    procon: { collection: 'reclamacoes_procon', dateField: 'dataProcon' },
-    n2: { collection: 'reclamacoes_n2Pix', dateField: 'dataEntradaN2' },
+    ra: { collection: 'reclamacoes_reclameAqui', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_reclameAqui },
+    bacen: { collection: 'reclamacoes_bacen', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_bacen },
+    procon: { collection: 'reclamacoes_procon', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_procon },
+    n2: { collection: 'reclamacoes_n2Pix', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_n2Pix },
   };
 
   // Valores de origem (Bacen) - NÃO usar como linhas da tabela Motivo

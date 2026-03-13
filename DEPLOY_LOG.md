@@ -36,3 +36,22 @@ Backend na raiz para deploy separado no Vercel. Ver branch `realtime-api` no rep
 **Branch:** main  
 
 Backend com Docker para deploy no GCP Cloud Run. Projeto unificado em main (frontend + backend). `backend/Dockerfile`, `backend/.dockerignore`, `cloudbuild.yaml` (raiz). uuid v13 com dynamic import. Deploy (na raiz): `gcloud builds submit --config=cloudbuild.yaml .`
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-05  
+**Tipo:** Push GitHub  
+**Versão:** 1.7.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` (v1.7.1) - motivoReduzido como array, match exato "Liberação Chave Pix", Pix Liberado/Retido/% Retenção conforme regras, log pixLiberadoNoPeriodo
+- `src/components/DashboardReclamacoes.js` (v1.0.16) - comentário campos data
+- `src/services/api.js` (v1.2.2) - log camposDataBackend
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Ajuste de contagens: motivoReduzido tratado sempre como array com match exato "Liberação Chave Pix". Pix Liberado = ocorrências no período com pixLiberado=true. Pix Retido = Liberação Chave Pix + Resolvido + pixLiberado=false. Logs de diagnóstico ampliados.

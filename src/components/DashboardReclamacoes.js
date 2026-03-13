@@ -1,9 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v1.0.15
- * 
- * Componente de cards baseado no DashboardOuvidoria do VeloHub.
- * Filtros ocultos (aplicados no backend): dataInicio 2026-01-01, produto Credito Pessoal.
+ * VERSION: v1.0.16
+ *
+ * Filtro de data: Bacen=dataEntrada, N2=dataEntradaN2, RA=dataReclam, Procon=dataProcon (não createdAt)
  */
 
 import React from 'react';

@@ -1,6 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.2.1
+ * VERSION: v1.2.2
+ *
+ * Filtro de data: backend usa por coleção (LISTA_SCHEMAS.rb)
+ * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon
  */
 
 import { API_BASE_URL } from '../config';
@@ -20,7 +23,11 @@ export async function fetchStats(params = {}) {
   if (params.produtos?.length) qs.set('produto', params.produtos.join(','));
   if (params.motivos?.length) qs.set('motivo', params.motivos.join(','));
   const url = `${API_BASE_URL}/api/stats${qs.toString() ? '?' + qs.toString() : ''}`;
-  console.log('[STATS_REQUEST]', { params, url });
+  console.log('[STATS_REQUEST]', {
+    params,
+    url,
+    camposDataBackend: { Bacen: 'dataEntrada', N2: 'dataEntradaN2', ReclameAqui: 'dataReclam', Procon: 'dataProcon' },
+  });
   const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) {
     throw new Error(`Erro ${response.status}: ${response.statusText}`);
