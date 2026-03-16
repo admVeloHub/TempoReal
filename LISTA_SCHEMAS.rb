@@ -297,8 +297,7 @@ listagem de schema de coleções do mongoDB
     Velohub: Boolean,             // Acesso ao VeloHub (pré-requisito para outros módulos)
     Ouvidoria: Boolean,           // Acesso ao módulo Ouvidoria (requer Velohub === true)
     Academy: Boolean,             // Acesso ao Academy
-    Desk: Boolean,                // Acesso ao Desk
-    tempoReal: Boolean            // Acesso ao Painel Tempo Real (obrigatório para este módulo)
+    Desk: Boolean                 // Acesso ao Desk
   },
   desligado: Boolean,             // Se foi desligado
   dataDesligamento: Date,         // Data de desligamento
@@ -535,15 +534,15 @@ listagem de schema de coleções do mongoDB
   },
   acionouCentral: Boolean,          // Se acionou Central de Ajuda
   protocolosCentral: [String],      // Array de protocolos da Central de Ajuda
-  n2SegundoNivel: Boolean,          // Se foi escalado para Ouvidoria
   protocolosN2: [String],           // Array de protocolos N2/Ouvidoria
+  bacen: Boolean,                  // Se acionou Bacen
+  protocolosBacen: [String],       // Array de protocolos Bacen
   reclameAqui: Boolean,             // Se acionou Reclame Aqui
   protocolosReclameAqui: [String],  // Array de protocolos Reclame Aqui
   procon: Boolean,                  // Se acionou Procon
   protocolosProcon: [String],       // Array de protocolos Procon
   pixLiberado: Boolean,             // PIX liberado (true = Liberado/Excluído/Solicitada; false = Não aplicável/vazio)
   statusContratoQuitado: Boolean,   // Se contrato está quitado
-  statusContratoAberto: Boolean,    // Se contrato está em aberto
   enviarParaCobranca: Boolean,      // Se deve enviar para cobrança
   Finalizado: {                     // Objeto de finalização (opcional)
     Resolvido: Boolean,             // Se a reclamação foi resolvida (se vazio/null = em andamento)

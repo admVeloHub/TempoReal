@@ -55,3 +55,21 @@ Backend com Docker para deploy no GCP Cloud Run. Projeto unificado em main (fron
 
 ### Descrição
 Ajuste de contagens: motivoReduzido tratado sempre como array com match exato "Liberação Chave Pix". Pix Liberado = ocorrências no período com pixLiberado=true. Pix Retido = Liberação Chave Pix + Resolvido + pixLiberado=false. Logs de diagnóstico ampliados.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-13  
+**Tipo:** Push GitHub  
+**Versão:** 2.1.2  
+**Repositório:** https://github.com/admVeloHub/TempoReal
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `src/components/DashboardReclamacoes.js` (v2.1.2) - opacidade headers 20%, painel adm deslocado 40px à esquerda
+- `DEPLOY_LOG.md` - registro deste push
+- Demais arquivos pendentes no working tree (ícones, index.html, App.js, index.css, LISTA_SCHEMAS.rb)
+
+### Descrição
+Ajustes visuais no dashboard: opacidade dos headers dos cards de 12% para 20%; conjunto ícone + painel administrativo deslocado 40px à esquerda.

@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.1
+ * VERSION: v1.2.2
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal.
@@ -271,14 +271,28 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900">
-      <header className="w-full bg-white dark:bg-gray-800 shadow py-3 px-6">
-        <div className="flex gap-1 justify-center items-center relative">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900 flex flex-col">
+      <header className="w-full bg-white dark:bg-gray-800 shadow py-2 px-4 shrink-0">
+        <div className="flex gap-0.5 justify-center items-center relative">
+          {activeTab === 'pix-tempo-real' && (
+            <button
+              type="button"
+              onClick={() => setModalAberto(true)}
+              className="absolute left-3 w-8 h-8 rounded-md flex items-center justify-center transition-colors hover:opacity-90"
+              style={{ backgroundColor: '#1634FF', color: '#fff' }}
+              aria-label="Configurações"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          )}
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
               style={{
                 backgroundColor: activeTab === tab.id ? '#1634FF' : 'transparent',
                 color: activeTab === tab.id ? '#fff' : '#1634FF',
@@ -287,11 +301,11 @@ function App() {
               {tab.label}
             </button>
           ))}
-          <div ref={userMenuRef} className="absolute right-4">
+          <div ref={userMenuRef} className="absolute right-3">
             <button
               type="button"
               onClick={() => setUserMenuAberto((o) => !o)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               aria-expanded={userMenuAberto}
               aria-haspopup="true"
             >
@@ -299,12 +313,12 @@ function App() {
                 <img
                   src={userPicture}
                   alt=""
-                  className="w-8 h-8 rounded-full object-cover border-2"
+                  className="w-6 h-6 rounded-full object-cover border-2"
                   style={{ borderColor: '#1634FF' }}
                 />
               ) : (
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
                   style={{ backgroundColor: '#1634FF' }}
                 >
                   {userName.charAt(0).toUpperCase()}
@@ -338,7 +352,7 @@ function App() {
         </div>
       </header>
 
-      <main className="w-full" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
+      <main className="flex-1 min-h-0 flex flex-col w-full overflow-auto" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
         {error && (
           <div className="mx-4 mt-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg">
             {error}
@@ -349,45 +363,33 @@ function App() {
         ) : activeTab === 'bacen' || activeTab === 'procon' || activeTab === 'n2' ? (
           <AbaAuxiliar tipo={activeTab} refreshTrigger={refreshTrigger} />
         ) : (
-          <DashboardReclamacoes stats={stats} loading={loading} activeTab={activeTab} filtrosHome={filtrosHome} />
+          <div className="flex-1 min-h-0 flex flex-col">
+            <DashboardReclamacoes stats={stats} loading={loading} activeTab={activeTab} filtrosHome={filtrosHome} />
+          </div>
         )}
       </main>
 
-      {activeTab === 'pix-tempo-real' && (
-        <>
-          <button
-            type="button"
-            onClick={() => setModalAberto(true)}
-            className="fixed bottom-6 right-6 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105"
-            style={{ backgroundColor: '#1634FF', color: '#fff' }}
-            aria-label="Configurações"
-          >
-            {ICONE_ENGRENAGEM}
-          </button>
-
-          {modalAberto && (
-            <ModalConfiguracoes
-              filtrosHome={filtrosHome}
-              onAplicar={(novosFiltros) => {
-                setFiltrosHome(novosFiltros);
-                try {
-                  localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(novosFiltros));
-                } catch (_) {}
-                setModalAberto(false);
-                loadStats(novosFiltros);
-              }}
-              onLimpar={() => {
-                setFiltrosHome(DEFAULT_FILTROS);
-                try {
-                  localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(DEFAULT_FILTROS));
-                } catch (_) {}
-                setModalAberto(false);
-                loadStats(DEFAULT_FILTROS);
-              }}
-              onFechar={() => setModalAberto(false)}
-            />
-          )}
-        </>
+      {modalAberto && (
+        <ModalConfiguracoes
+          filtrosHome={filtrosHome}
+          onAplicar={(novosFiltros) => {
+            setFiltrosHome(novosFiltros);
+            try {
+              localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(novosFiltros));
+            } catch (_) {}
+            setModalAberto(false);
+            loadStats(novosFiltros);
+          }}
+          onLimpar={() => {
+            setFiltrosHome(DEFAULT_FILTROS);
+            try {
+              localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(DEFAULT_FILTROS));
+            } catch (_) {}
+            setModalAberto(false);
+            loadStats(DEFAULT_FILTROS);
+          }}
+          onFechar={() => setModalAberto(false)}
+        />
       )}
     </div>
   );
