@@ -90,3 +90,20 @@ Ajustes visuais no dashboard: opacidade dos headers dos cards de 12% para 20%; c
 
 ### Descrição
 Filtro de produto do dashboard configurado por padrão como "Antecipação 2026".
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-13  
+**Tipo:** Push GitHub  
+**Versão:** 1.2.4  
+**Repositório:** https://github.com/admVeloHub/TempoReal
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `src/App.js` (v1.2.4) - remoção persistência localStorage; todo login inicia no padrão
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Removida persistência de filtros no localStorage. Todo carregamento/login inicia com filtros padrão (Antecipação 2026, data 2026-01-01).

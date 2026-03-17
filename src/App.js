@@ -1,9 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.3
+ * VERSION: v1.2.4
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
- * Polling a cada 60 segundos. Filtros da home configuráveis via modal.
+ * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Todo login inicia no padrão (sem persistência).
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -16,7 +16,6 @@ import LoginPage from './components/LoginPage';
 import { PRODUTOS, MOTIVOS, MultiSelectDropdown } from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
-const STORAGE_KEY_FILTROS = 'painel-filtros-home';
 
 const DEFAULT_FILTROS = {
   produtos: ['Antecipação 2026'],
@@ -178,22 +177,6 @@ function App() {
       setIsAuthenticated(ok);
       setAuthChecking(false);
     });
-  }, []);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_FILTROS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setFiltrosHome((prev) => ({
-          ...prev,
-          produtos: Array.isArray(parsed.produtos) ? parsed.produtos : DEFAULT_FILTROS.produtos,
-          motivos: Array.isArray(parsed.motivos) ? parsed.motivos : DEFAULT_FILTROS.motivos,
-          dataInicio: parsed.dataInicio || DEFAULT_FILTROS.dataInicio,
-          dataFim: parsed.dataFim ?? DEFAULT_FILTROS.dataFim,
-        }));
-      }
-    } catch (_) {}
   }, []);
 
   const loadStats = useCallback(async (overrideFiltros) => {
@@ -374,17 +357,11 @@ function App() {
           filtrosHome={filtrosHome}
           onAplicar={(novosFiltros) => {
             setFiltrosHome(novosFiltros);
-            try {
-              localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(novosFiltros));
-            } catch (_) {}
             setModalAberto(false);
             loadStats(novosFiltros);
           }}
           onLimpar={() => {
             setFiltrosHome(DEFAULT_FILTROS);
-            try {
-              localStorage.setItem(STORAGE_KEY_FILTROS, JSON.stringify(DEFAULT_FILTROS));
-            } catch (_) {}
             setModalAberto(false);
             loadStats(DEFAULT_FILTROS);
           }}
