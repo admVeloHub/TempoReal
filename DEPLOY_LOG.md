@@ -73,3 +73,20 @@ Ajuste de contagens: motivoReduzido tratado sempre como array com match exato "L
 
 ### Descrição
 Ajustes visuais no dashboard: opacidade dos headers dos cards de 12% para 20%; conjunto ícone + painel administrativo deslocado 40px à esquerda.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-13  
+**Tipo:** Push GitHub  
+**Versão:** 1.2.3  
+**Repositório:** https://github.com/admVeloHub/TempoReal
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `src/App.js` (v1.2.3) - filtro de produto padrão: Antecipação 2026
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Filtro de produto do dashboard configurado por padrão como "Antecipação 2026".

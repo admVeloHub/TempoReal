@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.2
+ * VERSION: v1.2.3
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal.
@@ -19,7 +19,7 @@ const POLL_INTERVAL_MS = 60000;
 const STORAGE_KEY_FILTROS = 'painel-filtros-home';
 
 const DEFAULT_FILTROS = {
-  produtos: [],
+  produtos: ['Antecipação 2026'],
   motivos: [],
   dataInicio: '2026-01-01',
   dataFim: '',
