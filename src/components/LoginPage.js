@@ -1,6 +1,6 @@
 /**
  * LoginPage - Painel Tempo Real
- * VERSION: v1.0.5
+ * VERSION: v1.0.6
  * Tela de login com email/senha e Google OAuth.
  */
 
@@ -102,9 +102,20 @@ const LoginPage = ({ onLoginSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: payload.email, picture: payload.picture || null }),
       });
-      const result = await res.json();
+      const raw = await res.text();
+      let result = {};
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {
+        setError(
+          res.status >= 500
+            ? 'Erro no servidor ou resposta inválida. Tente novamente ou use login por e-mail e senha.'
+            : 'Resposta inválida do servidor.'
+        );
+        return;
+      }
       if (!result.success) {
-        setError(result.error || 'Erro ao validar acesso');
+        setError(result.error || `Erro ao validar acesso (${res.status})`);
         return;
       }
       const userData = {
@@ -134,7 +145,18 @@ const LoginPage = ({ onLoginSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const result = await res.json();
+      const raw = await res.text();
+      let result = {};
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {
+        setError(
+          res.status >= 500
+            ? 'Erro no servidor ou resposta inválida. Tente novamente ou contate o suporte.'
+            : 'Resposta inválida do servidor.'
+        );
+        return;
+      }
       if (!result.success) {
         setError(result.error || 'Email ou senha incorretos');
         return;

@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Auth Routes
- * VERSION: v1.0.0
+ * VERSION: v1.0.3
  * Login e sessão. Acesso exige acessos.tempoReal === true em qualidade_funcionarios.
  */
 
@@ -8,6 +8,22 @@ const express = require('express');
 const router = express.Router();
 const userSessionLogger = require('../services/userSessionLogger');
 const { generateDefaultPassword } = require('../utils/password');
+
+function isDbConnectionError(err) {
+  const msg = err && (err.message || err.reason?.message || String(err));
+  if (!msg) return false;
+  const s = String(msg).toLowerCase();
+  return (
+    s.includes('mongo_env') ||
+    s.includes('mongo') ||
+    s.includes('server selection') ||
+    s.includes('econnrefused') ||
+    s.includes('etimedout') ||
+    s.includes('enotfound') ||
+    s.includes('topology') ||
+    s.includes('querySrv')
+  );
+}
 
 function initAuthRoutes(connectToMongo) {
   const getFuncionariosDb = async () => {
@@ -90,9 +106,12 @@ function initAuthRoutes(connectToMongo) {
       });
     } catch (error) {
       console.error('Auth login error:', error);
-      res.status(500).json({
+      const dbErr = isDbConnectionError(error);
+      res.status(dbErr ? 503 : 500).json({
         success: false,
-        error: 'Erro interno do servidor',
+        error: dbErr
+          ? 'Serviço indisponível: falha ao conectar ao banco de dados. Verifique MONGO_ENV no servidor.'
+          : 'Erro interno do servidor',
       });
     }
   });
@@ -129,18 +148,22 @@ function initAuthRoutes(connectToMongo) {
         return res.status(403).json({ success: false, error: accessCheck.error });
       }
 
+      const emailResolved = funcionario.userMail || funcionario.email || normalizedEmail;
       const userData = {
-        name: funcionario.colaboradorNome || funcionario.userMail,
-        email: funcionario.userMail || funcionario.email,
+        name: funcionario.colaboradorNome || emailResolved,
+        email: typeof emailResolved === 'string' ? emailResolved.toLowerCase().trim() : normalizedEmail,
         picture: funcionario.profile_pic || funcionario.fotoPerfil || null,
       };
 
       res.json({ success: true, user: userData, message: 'Acesso validado com sucesso' });
     } catch (error) {
       console.error('Auth validate-access error:', error);
-      res.status(500).json({
+      const dbErr = isDbConnectionError(error);
+      res.status(dbErr ? 503 : 500).json({
         success: false,
-        error: 'Erro interno do servidor',
+        error: dbErr
+          ? 'Serviço indisponível: falha ao conectar ao banco de dados. Verifique MONGO_ENV no servidor.'
+          : 'Erro interno do servidor',
       });
     }
   });

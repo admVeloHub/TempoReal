@@ -1,13 +1,13 @@
 /**
  * User Session Logger - Painel Tempo Real
- * VERSION: v1.0.1
+ * VERSION: v1.0.3
  * Log de sessões em console_conteudo.hub_sessions
  * uuid v13+ é ESM: usa dynamic import.
  */
 
 require('dotenv').config();
 
-const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_ENV;
+const mongoConnectionUri = process.env.MONGO_ENV;
 const SESSION_EXPIRATION_MS = 4 * 60 * 60 * 1000; // 4 horas
 
 class UserSessionLogger {
@@ -20,9 +20,9 @@ class UserSessionLogger {
 
   async connect() {
     if (this.isConnected) return;
-    if (!MONGODB_URI) throw new Error('MONGODB_URI não configurada');
+    if (!mongoConnectionUri) throw new Error('MONGO_ENV não configurada');
     const { MongoClient } = require('mongodb');
-    this.client = new MongoClient(MONGODB_URI);
+    this.client = new MongoClient(mongoConnectionUri);
     await this.client.connect();
     this.db = this.client.db('console_conteudo');
     this.collection = this.db.collection('hub_sessions');

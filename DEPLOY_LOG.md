@@ -128,3 +128,24 @@ Removida persistência de filtros no localStorage. Todo carregamento/login inici
 
 ### Descrição
 Stats: motivos canônicos por documento e por produto; novos campos `totaisPorProdutoPorDia` / `motivosPorProdutoPorDia` nas rotas auxiliares e RA. UI: tabela reclamações com produtos expansíveis, ajustes visuais de contraste e tipografia. Nova aba Judicial para `reclamacoes_judicial`.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-20  
+**Tipo:** Push GitHub  
+**Versão:** backend server v1.2.2 / auth v1.0.3 / userSessionLogger v1.0.3 / LoginPage v1.0.6  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `backend/server.js` (v1.2.2) - conexão MongoDB apenas via variável de ambiente `MONGO_ENV` (sem `MONGODB_URI`)
+- `backend/services/userSessionLogger.js` (v1.0.3) - idem `MONGO_ENV`
+- `backend/routes/auth.js` (v1.0.3) - mensagens 503 e detecção de erro de DB alinhadas a `MONGO_ENV`
+- `backend/.env.example`, `.env.example` - documentação só `MONGO_ENV`
+- `src/components/LoginPage.js` (v1.0.6) - tratamento de respostas não-JSON em login/validate-access
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Padronização da string de conexão MongoDB em `MONGO_ENV` (Cloud Run / local). Remoção de referências a `MONGODB_URI`. Ajustes em login para corpos de resposta não JSON.

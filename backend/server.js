@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Backend
- * VERSION: v1.2.0
+ * VERSION: v1.2.2
  *
  * Servidor Express com auth e GET /api/stats (protegido por sessão).
  */
@@ -14,16 +14,17 @@ const initAuthRoutes = require('./routes/auth');
 const { requireSession } = require('./middleware/sessionAuth');
 
 const PORT = process.env.PORT || 5050;
-const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_ENV;
+/** String de conexão MongoDB: variável de ambiente MONGO_ENV (ex.: Cloud Run Secret). */
+const mongoConnectionUri = process.env.MONGO_ENV;
 
 let mongoClient = null;
 
 const connectToMongo = async () => {
-  if (!MONGODB_URI) {
-    throw new Error('MONGODB_URI não configurada. Defina no .env');
+  if (!mongoConnectionUri) {
+    throw new Error('MONGO_ENV não configurada. Defina a string de conexão MongoDB no ambiente.');
   }
   if (!mongoClient) {
-    mongoClient = new MongoClient(MONGODB_URI);
+    mongoClient = new MongoClient(mongoConnectionUri);
     await mongoClient.connect();
   }
   return mongoClient;
@@ -43,7 +44,7 @@ app.get('/api/health', (req, res) => {
 const startServer = () => {
   app.listen(PORT, async () => {
     console.log(`Painel Reclamações Backend rodando na porta ${PORT}`);
-    if (MONGODB_URI) {
+    if (mongoConnectionUri) {
       try {
         await connectToMongo();
         console.log('MongoDB conectado');
@@ -51,7 +52,7 @@ const startServer = () => {
         console.error('Erro ao conectar MongoDB:', err.message);
       }
     } else {
-      console.warn('MONGODB_URI não definida - /api/stats retornará 503');
+      console.warn('MONGO_ENV não definida - /api/stats e auth falharão até configurar');
     }
   });
 };
