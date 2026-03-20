@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Backend
- * VERSION: v1.2.2
+ * VERSION: v1.2.3
  *
  * Servidor Express com auth e GET /api/stats (protegido por sessão).
  */
@@ -19,10 +19,26 @@ const mongoConnectionUri = process.env.MONGO_ENV;
 
 let mongoClient = null;
 
+/** Ping curto: evita reutilizar cliente após idle/rede (Cloud Run) com topologia já fechada. */
+async function resetMongoClientIfDead() {
+  if (!mongoClient) return;
+  try {
+    await mongoClient.db('admin').command({ ping: 1 }, { maxTimeMS: 5000 });
+  } catch (_e) {
+    try {
+      await mongoClient.close();
+    } catch (_close) {
+      /* ignore */
+    }
+    mongoClient = null;
+  }
+}
+
 const connectToMongo = async () => {
   if (!mongoConnectionUri) {
     throw new Error('MONGO_ENV não configurada. Defina a string de conexão MongoDB no ambiente.');
   }
+  await resetMongoClientIfDead();
   if (!mongoClient) {
     mongoClient = new MongoClient(mongoConnectionUri);
     await mongoClient.connect();

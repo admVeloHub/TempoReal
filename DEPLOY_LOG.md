@@ -149,3 +149,21 @@ Stats: motivos canônicos por documento e por produto; novos campos `totaisPorPr
 
 ### Descrição
 Padronização da string de conexão MongoDB em `MONGO_ENV` (Cloud Run / local). Remoção de referências a `MONGODB_URI`. Ajustes em login para corpos de resposta não JSON.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-20  
+**Tipo:** Push GitHub  
+**Versão:** backend server v1.2.3 / userSessionLogger v1.0.4  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `backend/server.js` (v1.2.3) - antes de reutilizar o `MongoClient` singleton, `ping` no `admin`; em falha (`MongoTopologyClosedError` / idle Cloud Run), `close` + nova conexão
+- `backend/services/userSessionLogger.js` (v1.0.4) - mesma lógica de verificação/reconexão no `connect()`
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Correção de `MongoTopologyClosedError: Topology is closed` em `/api/stats` e rotas que compartilham o cliente: evita reutilizar topologia já fechada após idle ou queda de rede no Cloud Run.

@@ -1,6 +1,6 @@
 /**
  * User Session Logger - Painel Tempo Real
- * VERSION: v1.0.3
+ * VERSION: v1.0.4
  * Log de sessões em console_conteudo.hub_sessions
  * uuid v13+ é ESM: usa dynamic import.
  */
@@ -19,9 +19,26 @@ class UserSessionLogger {
   }
 
   async connect() {
-    if (this.isConnected) return;
     if (!mongoConnectionUri) throw new Error('MONGO_ENV não configurada');
     const { MongoClient } = require('mongodb');
+
+    if (this.client) {
+      try {
+        await this.client.db('admin').command({ ping: 1 }, { maxTimeMS: 5000 });
+        return;
+      } catch (_e) {
+        try {
+          await this.client.close();
+        } catch (_close) {
+          /* ignore */
+        }
+        this.client = null;
+        this.db = null;
+        this.collection = null;
+        this.isConnected = false;
+      }
+    }
+
     this.client = new MongoClient(mongoConnectionUri);
     await this.client.connect();
     this.db = this.client.db('console_conteudo');
