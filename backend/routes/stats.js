@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.7.1
+ * VERSION: v1.7.6
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  *
@@ -43,6 +43,7 @@ const CAMPOS_DATA_POR_COLLECTION = {
   reclamacoes_n2Pix: 'dataEntradaN2',
   reclamacoes_reclameAqui: 'dataReclam',
   reclamacoes_procon: 'dataProcon',
+  reclamacoes_judicial: 'dataEntrada',
 };
 
 function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
@@ -90,6 +91,83 @@ function criarFiltroMotivo(motivos) {
     return { motivoReduzido: { $regex: escaped, $options: 'i' } };
   });
   return condicoes.length === 1 ? condicoes[0] : { $or: condicoes };
+}
+
+/** Chave única para agrupar variantes do mesmo motivo (caixa, acentos, espaços). */
+function chaveCanonicaMotivo(display) {
+  const s = String(display).trim().replace(/\s+/g, ' ');
+  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+/**
+ * Para motivosPorDia: cada documento deve contar no máximo 1 vez por motivo lógico no dia.
+ * motivoReduzido pode repetir entradas ou trazer variantes (espaços, caixa, acentuação).
+ * Retorna rótulos únicos (por chave canônica) para agregação.
+ */
+function motivosUnicosParaTabelaPorDia(motivoReduzido) {
+  const raw = Array.isArray(motivoReduzido)
+    ? motivoReduzido.filter((m) => m != null && String(m).trim())
+    : motivoReduzido != null && String(motivoReduzido).trim()
+      ? [motivoReduzido]
+      : [];
+  const porCanon = new Map();
+  raw.forEach((m) => {
+    const display = String(m).trim().replace(/\s+/g, ' ');
+    if (!display) return;
+    const canon = chaveCanonicaMotivo(display);
+    if (!porCanon.has(canon)) porCanon.set(canon, display);
+  });
+  return Array.from(porCanon.values());
+}
+
+/**
+ * Agrega motivosPorDia por chave canônica entre todos os documentos/dias.
+ * O rótulo exibido é a grafia mais frequente no período (empate: ordem pt-BR).
+ */
+function criarAgregadorMotivosPorDia() {
+  const porCanon = new Map();
+  return {
+    add(dia, displayRaw) {
+      const display = String(displayRaw).trim().replace(/\s+/g, ' ');
+      if (!display) return;
+      const canon = chaveCanonicaMotivo(display);
+      let entry = porCanon.get(canon);
+      if (!entry) {
+        entry = { dias: {}, votosRotulo: new Map() };
+        porCanon.set(canon, entry);
+      }
+      entry.votosRotulo.set(display, (entry.votosRotulo.get(display) || 0) + 1);
+      entry.dias[dia] = (entry.dias[dia] || 0) + 1;
+    },
+    toMotivosPorDia() {
+      const out = {};
+      porCanon.forEach((entry) => {
+        let melhor = '';
+        let nMelhor = -1;
+        entry.votosRotulo.forEach((n, lab) => {
+          if (n > nMelhor || (n === nMelhor && lab.localeCompare(melhor, 'pt-BR') < 0)) {
+            nMelhor = n;
+            melhor = lab;
+          }
+        });
+        out[melhor] = { ...entry.dias };
+      });
+      const sorted = {};
+      Object.keys(out)
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        .forEach((k) => {
+          sorted[k] = out[k];
+        });
+      return sorted;
+    },
+  };
+}
+
+const PRODUTO_SEM_VALOR = '(Sem produto)';
+
+function normalizarChaveProduto(produto) {
+  if (produto == null || String(produto).trim() === '') return PRODUTO_SEM_VALOR;
+  return String(produto).trim();
 }
 
 function calcularStatsPorTipo(docs) {
@@ -251,6 +329,7 @@ function initStatsRoutes(connectToMongo) {
     bacen: { collection: 'reclamacoes_bacen', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_bacen },
     procon: { collection: 'reclamacoes_procon', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_procon },
     n2: { collection: 'reclamacoes_n2Pix', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_n2Pix },
+    judicial: { collection: 'reclamacoes_judicial', dateField: CAMPOS_DATA_POR_COLLECTION.reclamacoes_judicial },
   };
 
   // Valores de origem (Bacen) - NÃO usar como linhas da tabela Motivo
@@ -302,7 +381,9 @@ function initStatsRoutes(connectToMongo) {
     const diasOrdenados = Array.from(diasSet).sort();
 
     const reclamacoesPorDia = [];
-    const motivosPorDiaMap = {};
+    const agregadorMotivos = criarAgregadorMotivosPorDia();
+    const totaisPorProdutoMap = new Map();
+    const agregadoresPorProduto = new Map();
     const jornadaPorDia = {};
 
     diasOrdenados.forEach((dia) => {
@@ -334,28 +415,51 @@ function initStatsRoutes(connectToMongo) {
 
       // Tabela Reclamações por Dia: linhas = motivoReduzido (excluir origem para Bacen)
       docsDoDia.forEach((d) => {
-        const motivosArr = Array.isArray(d.motivoReduzido)
-          ? d.motivoReduzido.filter((m) => m && String(m).trim())
-          : d.motivoReduzido ? [String(d.motivoReduzido).trim()] : [];
-        motivosArr.forEach((m) => {
-          const motivo = String(m).trim();
-          if (!motivo) return;
+        const produtoKey = normalizarChaveProduto(d.produto);
+        if (!totaisPorProdutoMap.has(produtoKey)) totaisPorProdutoMap.set(produtoKey, new Map());
+        const porDiaProd = totaisPorProdutoMap.get(produtoKey);
+        porDiaProd.set(dia, (porDiaProd.get(dia) || 0) + 1);
+
+        if (!agregadoresPorProduto.has(produtoKey)) {
+          agregadoresPorProduto.set(produtoKey, criarAgregadorMotivosPorDia());
+        }
+        const aggProd = agregadoresPorProduto.get(produtoKey);
+
+        motivosUnicosParaTabelaPorDia(d.motivoReduzido).forEach((motivo) => {
           if (tipo === 'bacen' && isOrigemBacen(motivo)) return; // origem ≠ motivo
-          if (!motivosPorDiaMap[motivo]) motivosPorDiaMap[motivo] = {};
-          motivosPorDiaMap[motivo][dia] = (motivosPorDiaMap[motivo][dia] || 0) + 1;
+          agregadorMotivos.add(dia, motivo);
+          aggProd.add(dia, motivo);
         });
       });
     });
 
-    const motivosPorDia = {};
-    Object.keys(motivosPorDiaMap).sort().forEach((motivo) => {
-      motivosPorDia[motivo] = motivosPorDiaMap[motivo];
+    const motivosPorDia = agregadorMotivos.toMotivosPorDia();
+
+    const chavesProdutoAux = Array.from(
+      new Set([...totaisPorProdutoMap.keys(), ...agregadoresPorProduto.keys()])
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const totaisPorProdutoPorDia = {};
+    const motivosPorProdutoPorDia = {};
+    chavesProdutoAux.forEach((pk) => {
+      const porDia = totaisPorProdutoMap.get(pk);
+      totaisPorProdutoPorDia[pk] = {};
+      if (porDia) {
+        Array.from(porDia.keys())
+          .sort()
+          .forEach((d) => {
+            totaisPorProdutoPorDia[pk][d] = porDia.get(d);
+          });
+      }
+      const agg = agregadoresPorProduto.get(pk);
+      motivosPorProdutoPorDia[pk] = agg ? agg.toMotivosPorDia() : {};
     });
 
     return {
       stats: calcularStatsPorTipo(docs),
       reclamacoesPorDia,
       motivosPorDia,
+      totaisPorProdutoPorDia,
+      motivosPorProdutoPorDia,
       jornadaDoReclamante: jornadaPorDia,
       dias: diasOrdenados,
     };
@@ -404,7 +508,9 @@ function initStatsRoutes(connectToMongo) {
       const stats = calcularStatsPorTipo(reclameAquiDocs);
 
       const reclamacoesPorDia = [];
-      const motivosPorDiaMap = {};
+      const agregadorMotivos = criarAgregadorMotivosPorDia();
+      const totaisPorProdutoMap = new Map();
+      const agregadoresPorProduto = new Map();
       const jornadaPorDia = {};
 
       const diaStr = (d) => {
@@ -437,23 +543,41 @@ function initStatsRoutes(connectToMongo) {
         jornadaPorDia[dia] = { total, reclameAqui, bacen, acionouCentral, n2SegundoNivel, procon };
 
         docsDoDia.forEach((d) => {
-          const motivos = Array.isArray(d.motivoReduzido)
-            ? d.motivoReduzido.filter((m) => m && String(m).trim())
-            : d.motivoReduzido
-              ? [String(d.motivoReduzido).trim()]
-              : [];
-          motivos.forEach((m) => {
-            const motivo = String(m).trim();
-            if (!motivo) return;
-            if (!motivosPorDiaMap[motivo]) motivosPorDiaMap[motivo] = {};
-            motivosPorDiaMap[motivo][dia] = (motivosPorDiaMap[motivo][dia] || 0) + 1;
+          const produtoKey = normalizarChaveProduto(d.produto);
+          if (!totaisPorProdutoMap.has(produtoKey)) totaisPorProdutoMap.set(produtoKey, new Map());
+          const porDiaProd = totaisPorProdutoMap.get(produtoKey);
+          porDiaProd.set(dia, (porDiaProd.get(dia) || 0) + 1);
+
+          if (!agregadoresPorProduto.has(produtoKey)) {
+            agregadoresPorProduto.set(produtoKey, criarAgregadorMotivosPorDia());
+          }
+          const aggProd = agregadoresPorProduto.get(produtoKey);
+          motivosUnicosParaTabelaPorDia(d.motivoReduzido).forEach((motivo) => {
+            agregadorMotivos.add(dia, motivo);
+            aggProd.add(dia, motivo);
           });
         });
       });
 
-      const motivosPorDia = {};
-      Object.keys(motivosPorDiaMap).sort().forEach((motivo) => {
-        motivosPorDia[motivo] = motivosPorDiaMap[motivo];
+      const motivosPorDia = agregadorMotivos.toMotivosPorDia();
+
+      const chavesProduto = Array.from(
+        new Set([...totaisPorProdutoMap.keys(), ...agregadoresPorProduto.keys()])
+      ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const totaisPorProdutoPorDia = {};
+      const motivosPorProdutoPorDia = {};
+      chavesProduto.forEach((pk) => {
+        const porDia = totaisPorProdutoMap.get(pk);
+        totaisPorProdutoPorDia[pk] = {};
+        if (porDia) {
+          Array.from(porDia.keys())
+            .sort()
+            .forEach((d) => {
+              totaisPorProdutoPorDia[pk][d] = porDia.get(d);
+            });
+        }
+        const agg = agregadoresPorProduto.get(pk);
+        motivosPorProdutoPorDia[pk] = agg ? agg.toMotivosPorDia() : {};
       });
 
       res.json({
@@ -462,6 +586,8 @@ function initStatsRoutes(connectToMongo) {
           'Reclame Aqui': stats,
           reclamacoesPorDia,
           motivosPorDia,
+          totaisPorProdutoPorDia,
+          motivosPorProdutoPorDia,
           jornadaDoReclamante: jornadaPorDia,
           dias: diasOrdenados,
         }
@@ -471,7 +597,7 @@ function initStatsRoutes(connectToMongo) {
     }
   });
 
-  ['bacen', 'procon', 'n2'].forEach((tipo) => {
+  ['bacen', 'procon', 'n2', 'judicial'].forEach((tipo) => {
     router.get(`/${tipo}`, async (req, res) => {
       try {
         let client;
@@ -502,13 +628,16 @@ function initStatsRoutes(connectToMongo) {
         if (!result) {
           return res.status(400).json({ success: false, message: 'Tipo inválido', data: null });
         }
-        const label = tipo === 'bacen' ? 'Bacen' : tipo === 'procon' ? 'Procon' : 'N2';
+        const label =
+          tipo === 'bacen' ? 'Bacen' : tipo === 'procon' ? 'Procon' : tipo === 'n2' ? 'N2' : 'Judicial';
         res.json({
           success: true,
           data: {
             [label]: result.stats,
             reclamacoesPorDia: result.reclamacoesPorDia,
             motivosPorDia: result.motivosPorDia,
+            totaisPorProdutoPorDia: result.totaisPorProdutoPorDia,
+            motivosPorProdutoPorDia: result.motivosPorProdutoPorDia,
             jornadaDoReclamante: result.jornadaDoReclamante,
             dias: result.dias,
           }

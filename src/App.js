@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.4
+ * VERSION: v1.2.5
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Todo login inicia no padrão (sem persistência).
@@ -37,6 +37,7 @@ const TABS = [
   { id: 'bacen', label: 'Bacen' },
   { id: 'procon', label: 'Procon' },
   { id: 'n2', label: 'N2' },
+  { id: 'judicial', label: 'Judicial' },
 ];
 
 function ModalConfiguracoes({ filtrosHome, onAplicar, onLimpar, onFechar }) {
@@ -343,7 +344,7 @@ function App() {
         )}
         {activeTab === 'ra' ? (
           <AbaRA refreshTrigger={refreshTrigger} />
-        ) : activeTab === 'bacen' || activeTab === 'procon' || activeTab === 'n2' ? (
+        ) : activeTab === 'bacen' || activeTab === 'procon' || activeTab === 'n2' || activeTab === 'judicial' ? (
           <AbaAuxiliar tipo={activeTab} refreshTrigger={refreshTrigger} />
         ) : (
           <div className="flex-1 min-h-0 flex flex-col">

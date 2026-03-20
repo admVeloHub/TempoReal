@@ -1,8 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - AbaAuxiliar
- * VERSION: v1.0.4
+ * VERSION: v1.0.5
  *
- * Aba auxiliar (Bacen, Procon, N2) com seção de filtros.
+ * Aba auxiliar (Bacen, Procon, N2, Judicial) com seção de filtros.
  * Mesmas tabelas e gráficos que AbaRA.
  */
 

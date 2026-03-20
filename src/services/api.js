@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.2.2
+ * VERSION: v1.2.5
  *
  * Filtro de data: backend usa por coleção (LISTA_SCHEMAS.rb)
  * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon

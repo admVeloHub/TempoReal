@@ -107,3 +107,24 @@ Filtro de produto do dashboard configurado por padrão como "Antecipação 2026"
 
 ### Descrição
 Removida persistência de filtros no localStorage. Todo carregamento/login inicia com filtros padrão (Antecipação 2026, data 2026-01-01).
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-03-20  
+**Tipo:** Push GitHub  
+**Versão:** backend v1.7.6 / front v1.2.6  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` (v1.7.6) - deduplicação/agrupamento de motivos; totais e motivos por produto (RA + Bacen/Procon/N2/Judicial); rota `GET /api/stats/judicial` (`reclamacoes_judicial`, `dataEntrada`)
+- `src/App.js` (v1.2.5) - aba Judicial
+- `src/components/AbaAuxiliar.js` (v1.0.5) - suporte tipo judicial
+- `src/components/ConteudoAuxiliar.js` (v1.2.6) - tabelas pivot scroll/sticky/zebrado; coluna Produtos expansível em todas as abas com API; rótulos Antecipação; bordas e fonte `text-xs`
+- `src/services/api.js` (v1.2.5) - versão comentário
+- `DEPLOY_LOG.md` - registro deste push
+
+### Descrição
+Stats: motivos canônicos por documento e por produto; novos campos `totaisPorProdutoPorDia` / `motivosPorProdutoPorDia` nas rotas auxiliares e RA. UI: tabela reclamações com produtos expansíveis, ajustes visuais de contraste e tipografia. Nova aba Judicial para `reclamacoes_judicial`.
