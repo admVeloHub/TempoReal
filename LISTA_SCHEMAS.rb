@@ -733,7 +733,7 @@ listagem de schema de coleções do mongoDB
   _id: ObjectId,
   receivedAt: Date,
   octadeskNumber: Number,          // null se payload inválido
-  outcome: String,                 // received | upsert | skipped | error
+  outcome: String,                 // upsert | skipped | error | unauthorized (POST sem auth válida)
   message: String,
   detail: String                   // opcional, texto curto
   }

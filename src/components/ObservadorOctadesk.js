@@ -1,8 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - ObservadorOctadesk
- * VERSION: v1.0.0
+ * VERSION: v1.2.0
  *
- * MVP: logs de recebimento do webhook Octadesk (refinável depois).
+ * Logs do webhook Octadesk + metadados da API para distinguir lista vazia de falha.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -13,14 +13,19 @@ const POLL_MS = 20000;
 
 function ObservadorOctadesk({ userName, userPicture, userEmail }) {
   const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastFetchAt, setLastFetchAt] = useState(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showLoadingOverlay = false) => {
+    if (showLoadingOverlay) setLoading(true);
     try {
       const res = await fetchOctadeskIngestLogs(150);
       setItems(res?.data?.items || []);
+      setMeta(res?.data?.meta || null);
       setError(null);
+      setLastFetchAt(new Date());
     } catch (e) {
       if (e.message?.includes('401') || e.message?.includes('Sessão')) {
         logout();
@@ -28,13 +33,13 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
       }
       setError(e.message || 'Erro ao carregar logs');
     } finally {
-      setLoading(false);
+      if (showLoadingOverlay) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const t = setInterval(load, POLL_MS);
+    load(true);
+    const t = setInterval(() => load(false), POLL_MS);
     return () => clearInterval(t);
   }, [load]);
 
@@ -46,6 +51,9 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
       return String(iso);
     }
   };
+
+  const apiOk = !error && meta != null;
+  const webhookPublic = apiOk && meta.webhookRequiresSecret === false;
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900 flex flex-col font-[Poppins]">
@@ -63,6 +71,14 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
           </h1>
         </div>
         <div className="flex items-center gap-2 shrink-0 text-xs text-gray-600 dark:text-gray-400">
+          <button
+            type="button"
+            onClick={() => load(true)}
+            disabled={loading}
+            className="px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Atualizar
+          </button>
           {userPicture ? (
             <img src={userPicture} alt="" className="w-7 h-7 rounded-full object-cover border border-gray-300" />
           ) : null}
@@ -74,12 +90,44 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
         {userEmail && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{userEmail}</p>
         )}
-        {loading && items.length === 0 && (
-          <p className="text-gray-600 dark:text-gray-400">Carregando logs…</p>
+
+        {webhookPublic && (
+          <div className="mb-4 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-600">
+            <strong>Webhook sem autenticação por segredo:</strong> qualquer POST JSON em{' '}
+            <code className="text-xs">/api/integrations/octadesk/webhook</code> é processado. Para reduzir abuso, use restrição de
+            rede (Cloud Armor, IP allowlist na Octadesk, etc.) se disponível.
+          </div>
+        )}
+
+        {apiOk && (
+          <div className="mb-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+            <p>
+              <span className="font-medium text-gray-800 dark:text-gray-200">Conexão com a API:</span>{' '}
+              <span className="text-green-700 dark:text-green-400">OK</span> — resposta recebida com sucesso.
+            </p>
+            <p>
+              Registros nesta página: <strong>{meta.countReturned}</strong>
+              {meta.approximateTotalInCollection != null && (
+                <> — total aproximado na coleção de logs: <strong>{meta.approximateTotalInCollection}</strong></>
+              )}
+            </p>
+            <p>
+              Última consulta ao servidor:{' '}
+              <strong>{lastFetchAt ? fmtDate(lastFetchAt.toISOString()) : '—'}</strong>
+              {meta.fetchedAt && (
+                <> (horário do servidor: {fmtDate(meta.fetchedAt)})</>
+              )}
+            </p>
+          </div>
+        )}
+
+        {loading && items.length === 0 && !error && (
+          <p className="text-gray-600 dark:text-gray-400 mb-3">Carregando logs…</p>
         )}
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
-            {error}
+            <strong>Falha ao buscar logs</strong> — {error}. Isso indica problema de rede, CORS, URL da API ou sessão; não
+            prova se o webhook da Octadesk chegou ou não.
           </div>
         )}
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow overflow-x-auto">
@@ -112,7 +160,9 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
                               ? 'rgba(252, 194, 0, 0.2)'
                               : row.outcome === 'error'
                                 ? 'rgba(192, 57, 43, 0.15)'
-                                : 'rgba(22, 52, 255, 0.1)',
+                                : row.outcome === 'unauthorized'
+                                  ? 'rgba(128, 90, 213, 0.2)'
+                                  : 'rgba(22, 52, 255, 0.1)',
                         color: '#000058',
                       }}
                     >
@@ -125,8 +175,27 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
               ))}
             </tbody>
           </table>
-          {!loading && items.length === 0 && !error && (
-            <p className="p-6 text-center text-gray-500 dark:text-gray-400 text-sm">Nenhum log registrado ainda.</p>
+          {!loading && items.length === 0 && !error && apiOk && (
+            <div className="p-6 text-sm text-gray-600 dark:text-gray-400 space-y-3 border-t border-gray-100 dark:border-gray-700">
+              <p className="font-medium text-gray-800 dark:text-gray-200">Nenhuma linha na tabela — mas a API respondeu OK.</p>
+              <p>Interpretação:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  Se <strong>nunca</strong> houve POST válido no webhook, a coleção <code className="text-xs">octadesk_ingest_log</code> está
+                  vazia (normal).
+                </li>
+                <li>
+                  Dispare um teste na Octadesk ou com <code className="text-xs">curl</code>: cada POST processado gera linha{' '}
+                  <strong>upsert</strong>, <strong>skipped</strong> ou <strong>error</strong>.
+                </li>
+                <li>
+                  Linhas antigas com <strong>unauthorized</strong> referem-se a tentativas quando ainda havia checagem de segredo.
+                </li>
+                <li>
+                  Confira também os logs do Cloud Run (mensagens <code className="text-xs">[WEBHOOK OCTADESK]</code>).
+                </li>
+              </ul>
+            </div>
           )}
         </div>
       </main>

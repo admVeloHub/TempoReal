@@ -2,6 +2,27 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-25  
+**Tipo:** Push GitHub  
+**Versão:** octadeskIntegration v1.1.0 / octadeskIngest v1.1.0 / Observador v1.2.0 / api v1.3.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/octadeskIntegration.js` (v1.1.0) — webhook **sem** autenticação por segredo; `GET /logs` com `Cache-Control: no-store`
+- `backend/services/octadeskIngestService.js` (v1.1.0) — remoção validação de secret; meta `webhookRequiresSecret: false` nos logs
+- `backend/.env.example` — removido `OCTADESK_WEBHOOK_SECRET` (não utilizado)
+- `src/components/ObservadorOctadesk.js` (v1.2.0) — aviso de endpoint público; ajuda sem `unauthorized` como fluxo atual
+- `src/services/api.js` (v1.3.1) — `fetch` dos logs com `cache: 'no-store'`
+- `LISTA_SCHEMAS.rb` — ajustes de comentário quando aplicável
+
+### Descrição
+Webhook Octadesk aceita payload sem secret (requisito operacional). Observador e API de logs evitam cache HTTP; documentação de env alinhada.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-24  
 **Tipo:** Push GitHub  
 **Versão:** backend server v1.3.0 / stats v1.8.1 / octadeskIngest v1.0.4 / front App v1.3.0 / Dashboard v2.2.0 / api v1.3.0  

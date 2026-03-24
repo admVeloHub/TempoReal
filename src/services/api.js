@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.3.0
+ * VERSION: v1.3.1
  *
  * Filtro de data: backend usa por coleção (LISTA_SCHEMAS.rb)
  * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon | N1: dataEntradaN1
@@ -88,7 +88,10 @@ export async function fetchOctadeskIngestLogs(limit = 100) {
   const qs = new URLSearchParams();
   qs.set('limit', String(limit));
   const url = `${API_BASE_URL}/api/integrations/octadesk/logs?${qs.toString()}`;
-  const response = await fetch(url, { headers: getAuthHeaders() });
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+    cache: 'no-store',
+  });
   if (!response.ok) {
     throw new Error(`Erro ${response.status}: ${response.statusText}`);
   }

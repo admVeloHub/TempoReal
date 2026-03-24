@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Octadesk ingest (webhook → MongoDB)
- * VERSION: v1.0.4
+ * VERSION: v1.1.0
  *
  * Regras: motivo_2026 = Chave Pix → registra e alimenta Ped. Liberação (motivoReduzido compatível com stats).
  * Detalhe Liberação Chave Pix + status Resolvido → pixLiberado (mostrador Liberados / “retirado”).
@@ -119,19 +119,6 @@ async function writeIngestLog(db, { octadeskNumber, outcome, message, detail }) 
   }
 }
 
-function validateWebhookSecret(req) {
-  const secret = process.env.OCTADESK_WEBHOOK_SECRET;
-  if (!secret || String(secret).trim() === '') return false;
-  const h = req.headers['x-webhook-secret'] || req.headers['x-octadesk-webhook-secret'];
-  if (h === secret) return true;
-  const auth = req.headers.authorization;
-  if (auth && typeof auth === 'string' && auth.startsWith('Bearer ') && auth.slice(7) === secret) return true;
-  // Mesmo valor da API Octadesk (ex.: curl com --header 'x-api-key: …')
-  const apiKey = req.headers['x-api-key'];
-  if (apiKey === secret) return true;
-  return false;
-}
-
 async function ensureOctadeskIndexes(client) {
   const db = client.db('hub_ouvidoria');
   const n1 = db.collection(N1_STATS_COLLECTION);
@@ -229,13 +216,34 @@ async function listIngestLogs(connectToMongo, limit = 100) {
   }));
 }
 
+async function listIngestLogsWithMeta(connectToMongo, limit = 100) {
+  const items = await listIngestLogs(connectToMongo, limit);
+  let approximateTotalInCollection = null;
+  try {
+    const client = await connectToMongo();
+    const db = client.db('hub_ouvidoria');
+    approximateTotalInCollection = await db.collection(INGEST_LOG_COLLECTION).estimatedDocumentCount();
+  } catch (e) {
+    console.warn('[octadeskIngest] estimatedDocumentCount:', e.message);
+  }
+  return {
+    items,
+    meta: {
+      fetchedAt: new Date().toISOString(),
+      countReturned: items.length,
+      approximateTotalInCollection,
+      webhookRequiresSecret: false,
+    },
+  };
+}
+
 module.exports = {
   N1_STATS_COLLECTION,
   INGEST_LOG_COLLECTION,
   normalizeText,
   isEligibleCustomFields,
-  validateWebhookSecret,
   processOctadeskWebhook,
   ensureOctadeskIndexes,
   listIngestLogs,
+  listIngestLogsWithMeta,
 };

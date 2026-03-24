@@ -1,20 +1,16 @@
 /**
  * Painel Reclamações Tempo Real - Rotas Octadesk (webhook + logs)
- * VERSION: v1.0.0
+ * VERSION: v1.1.0
+ *
+ * POST webhook: sem autenticação por segredo (requisito Octadesk). Restrinja por rede/API Gateway se necessário.
  */
 
 const { requireSession } = require('../middleware/sessionAuth');
-const {
-  validateWebhookSecret,
-  processOctadeskWebhook,
-  listIngestLogs,
-} = require('../services/octadeskIngestService');
+const { processOctadeskWebhook, listIngestLogsWithMeta } = require('../services/octadeskIngestService');
 
 function registerOctadeskRoutes(app, connectToMongo) {
   app.post('/api/integrations/octadesk/webhook', async (req, res) => {
-    if (!validateWebhookSecret(req)) {
-      return res.status(401).json({ success: false, message: 'Não autorizado' });
-    }
+    console.log('[WEBHOOK OCTADESK] POST recebido (sem checagem de secret)');
     try {
       const r = await processOctadeskWebhook(req.body, connectToMongo);
       return res.status(r.httpStatus).json({
@@ -34,8 +30,10 @@ function registerOctadeskRoutes(app, connectToMongo) {
 
   app.get('/api/integrations/octadesk/logs', requireSession, async (req, res) => {
     try {
-      const items = await listIngestLogs(connectToMongo, req.query.limit);
-      return res.json({ success: true, data: { items } });
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      const { items, meta } = await listIngestLogsWithMeta(connectToMongo, req.query.limit);
+      return res.json({ success: true, data: { items, meta } });
     } catch (err) {
       console.error('[GET /api/integrations/octadesk/logs]', err);
       return res.status(500).json({ success: false, message: err.message || 'Erro ao listar logs' });
