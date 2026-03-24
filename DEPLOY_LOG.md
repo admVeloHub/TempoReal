@@ -2,6 +2,32 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-24  
+**Tipo:** Push GitHub  
+**Versão:** backend server v1.3.0 / stats v1.8.1 / octadeskIngest v1.0.4 / front App v1.3.0 / Dashboard v2.2.0 / api v1.3.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `LISTA_SCHEMAS.rb` — `reclamações_n1Stats`, `octadesk_ingest_log`, comentários alinhados às regras N1 (motivo Chave Pix; detalhe Liberação/Retenção; pixLiberado; produto)
+- `backend/server.js` (v1.3.0) — registro rotas Octadesk, `ensureOctadeskIndexes` na subida
+- `backend/routes/octadeskIntegration.js` (v1.0.0) — `POST /api/integrations/octadesk/webhook`, `GET /api/integrations/octadesk/logs`
+- `backend/services/octadeskIngestService.js` (v1.0.4) — elegibilidade por motivo Chave Pix; `pixLiberado` com Resolvido + detalhe; `x-api-key` no webhook; upsert `reclamações_n1Stats`
+- `backend/routes/stats.js` (v1.8.1) — `porTipo.N1`, Total cinco fontes, `dataEntradaN1`, `documentoResolvidoParaMetricas` (taxa resolução estrita)
+- `backend/.env.example` — `OCTADESK_WEBHOOK_SECRET` e notas de headers
+- `src/components/DashboardReclamacoes.js` (v2.2.0) — N1 via `porTipo`
+- `src/components/ObservadorOctadesk.js` (v1.0.0) — `/observador`
+- `src/App.js` (v1.3.0) — rota observador, link menu usuário
+- `src/services/api.js` (v1.3.0) — `fetchOctadeskIngestLogs`
+- `exemplo/body.json` — payload exemplo Octadesk
+
+### Descrição
+Integração Octadesk: webhook (secret ou `x-api-key`), persistência em `reclamações_n1Stats`, logs em `octadesk_ingest_log`, agregação N1 no painel e no Total, tela Observador. Regras de negócio N1 e taxa de resolução documentadas no código e no LISTA_SCHEMAS.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2025-03-05  
 **Tipo:** Push GitHub  
 **Versão:** 1.0.0  

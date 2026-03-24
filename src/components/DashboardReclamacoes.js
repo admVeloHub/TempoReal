@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.1.2
+ * VERSION: v2.2.0
  *
  * Painel executivo + cards por canal. Em Aberto/Resolvido não exibidos (dados mantidos para Taxa Resolução).
  * Pedidos Liberação = solLiberacao. Paleta LAYOUT_GUIDELINES.
@@ -82,13 +82,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
   const temFiltros = filtrosHome?.produtos?.length || filtrosHome?.motivos?.length;
   const semDados = Object.keys(porTipo).length === 0 || porTipo.Total?.ocorrencias === 0;
 
-  /* Dados N1: placeholder até fonte definida */
-  const dadosN1 = { ocorrencias: 0, solLiberacao: 0, pixLiberado: 0, pixRetido: 0, percRetencao: 0 };
-
-  const getDados = (key) => {
-    if (key === 'N1') return dadosN1;
-    return porTipo[key] || {};
-  };
+  const getDados = (key) => porTipo[key] || {};
 
   const total = porTipo.Total || {};
   const hexToRgba = (hex, alpha = 0.20) => {

@@ -1,9 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.2.5
+ * VERSION: v1.3.0
  *
  * Filtro de data: backend usa por coleção (LISTA_SCHEMAS.rb)
- * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon
+ * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon | N1: dataEntradaN1
  */
 
 import { API_BASE_URL } from '../config';
@@ -26,7 +26,7 @@ export async function fetchStats(params = {}) {
   console.log('[STATS_REQUEST]', {
     params,
     url,
-    camposDataBackend: { Bacen: 'dataEntrada', N2: 'dataEntradaN2', ReclameAqui: 'dataReclam', Procon: 'dataProcon' },
+    camposDataBackend: { Bacen: 'dataEntrada', N2: 'dataEntradaN2', ReclameAqui: 'dataReclam', Procon: 'dataProcon', N1: 'dataEntradaN1' },
   });
   const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) {
@@ -80,6 +80,21 @@ export async function fetchStatsAuxiliar(tipo, params = {}) {
   const data = await response.json();
   if (!data.success) {
     throw new Error(data.message || `Erro ao buscar estatísticas ${tipo}`);
+  }
+  return data;
+}
+
+export async function fetchOctadeskIngestLogs(limit = 100) {
+  const qs = new URLSearchParams();
+  qs.set('limit', String(limit));
+  const url = `${API_BASE_URL}/api/integrations/octadesk/logs?${qs.toString()}`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
+  if (!response.ok) {
+    throw new Error(`Erro ${response.status}: ${response.statusText}`);
+  }
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(data.message || 'Erro ao buscar logs Octadesk');
   }
   return data;
 }

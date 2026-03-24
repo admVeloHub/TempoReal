@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.2.5
+ * VERSION: v1.3.0
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Todo login inicia no padrão (sem persistência).
@@ -13,9 +13,15 @@ import DashboardReclamacoes from './components/DashboardReclamacoes';
 import AbaRA from './components/AbaRA';
 import AbaAuxiliar from './components/AbaAuxiliar';
 import LoginPage from './components/LoginPage';
+import ObservadorOctadesk from './components/ObservadorOctadesk';
 import { PRODUTOS, MOTIVOS, MultiSelectDropdown } from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
+
+function isObservadorPath() {
+  const p = (window.location.pathname || '/').replace(/\/$/, '') || '/';
+  return p === '/observador';
+}
 
 const DEFAULT_FILTROS = {
   produtos: ['Antecipação 2026'],
@@ -254,6 +260,16 @@ function App() {
     return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
 
+  if (isObservadorPath()) {
+    return (
+      <ObservadorOctadesk
+        userName={userName}
+        userPicture={userPicture}
+        userEmail={userSession?.user?.email}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900 flex flex-col">
       <header className="w-full bg-white dark:bg-gray-800 shadow py-2 px-4 shrink-0">
@@ -317,6 +333,13 @@ function App() {
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{userName}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userSession?.user?.email}</p>
                 </div>
+                <a
+                  href="/observador"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  onClick={() => setUserMenuAberto(false)}
+                >
+                  Observador Octadesk
+                </a>
                 <button
                   type="button"
                   onClick={() => {

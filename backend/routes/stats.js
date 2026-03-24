@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.7.6
+ * VERSION: v1.8.1
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  *
@@ -9,12 +9,14 @@
  * - N2: dataEntradaN2
  * - Reclame Aqui: dataReclam
  * - Procon: dataProcon
+ * - N1 Octadesk: dataEntradaN1 (reclamações_n1Stats)
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
  */
 
 const express = require('express');
 const router = express.Router();
+const { N1_STATS_COLLECTION } = require('../services/octadeskIngestService');
 
 const MOTIVO_LIBERACAO_CHAVE_PIX = 'liberação chave pix';
 const MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO = 'liberacao chave pix';
@@ -44,6 +46,7 @@ const CAMPOS_DATA_POR_COLLECTION = {
   reclamacoes_reclameAqui: 'dataReclam',
   reclamacoes_procon: 'dataProcon',
   reclamacoes_judicial: 'dataEntrada',
+  reclamacoes_n1Stats: 'dataEntradaN1',
 };
 
 function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
@@ -170,10 +173,18 @@ function normalizarChaveProduto(produto) {
   return String(produto).trim();
 }
 
+/**
+ * Taxa de resolução e “resolvido”: somente com Finalizado.Resolvido === true (estrito).
+ * Qualquer outro caso (ausente, false, null) = não resolvido para as métricas.
+ */
+function documentoResolvidoParaMetricas(r) {
+  return r != null && r.Finalizado != null && r.Finalizado.Resolvido === true;
+}
+
 function calcularStatsPorTipo(docs) {
   const ocorrencias = docs.length;
-  const emAberto = docs.filter(r => !r.Finalizado || r.Finalizado.Resolvido !== true).length;
-  const resolvido = docs.filter(r => r.Finalizado?.Resolvido === true).length;
+  const emAberto = docs.filter((r) => !documentoResolvidoParaMetricas(r)).length;
+  const resolvido = docs.filter((r) => documentoResolvidoParaMetricas(r)).length;
   const caEProtocolos = docs.filter(r => (
     r.acionouCentral === true ||
     (r.protocolosCentral && Array.isArray(r.protocolosCentral) && r.protocolosCentral.length > 0) ||
@@ -190,7 +201,7 @@ function calcularStatsPorTipo(docs) {
   const docsLiberacaoChavePix = docs.filter((r) => motivoContemLiberacaoChavePix(r.motivoReduzido));
   const pixLiberado = docs.filter((r) => r.pixLiberado === true).length;
   const pixRetido = docsLiberacaoChavePix.filter(
-    (r) => r.Finalizado?.Resolvido === true && r.pixLiberado === false
+    (r) => documentoResolvidoParaMetricas(r) && r.pixLiberado === false
   ).length;
   const percRetencao =
     docsLiberacaoChavePix.length > 0
@@ -262,32 +273,37 @@ function initStatsRoutes(connectToMongo) {
       const filtroDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
       const filtroDataRA = criarFiltroDataPorCollection('reclamacoes_reclameAqui', dataInicio, dataFim);
       const filtroDataProcon = criarFiltroDataPorCollection('reclamacoes_procon', dataInicio, dataFim);
+      const filtroDataN1 = criarFiltroDataPorCollection('reclamacoes_n1Stats', dataInicio, dataFim);
 
       const filtroBacen = mesclarFiltros(filtroDataBacen, filtroProduto, filtroMotivo);
       const filtroN2 = mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
+      const filtroN1 = mesclarFiltros(filtroDataN1, filtroProduto, filtroMotivo);
 
       console.log('[STATS_FILTROS]', {
-        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon' },
+        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'dataEntradaN1' },
         dataInicio: dataInicioRaw,
         dataFim: dataFimRaw || '(hoje)',
         filtroBacen: JSON.stringify(filtroBacen),
         filtroN2: JSON.stringify(filtroN2),
         filtroRA: JSON.stringify(filtroReclameAqui),
         filtroProcon: JSON.stringify(filtroProcon),
+        filtroN1: JSON.stringify(filtroN1),
       });
 
-      const [bacen, n2Pix, reclameAquiDocs, proconDocs] = await Promise.all([
+      const [bacen, n2Pix, reclameAquiDocs, proconDocs, n1Docs] = await Promise.all([
         db.collection('reclamacoes_bacen').find(filtroBacen).toArray(),
         db.collection('reclamacoes_n2Pix').find(filtroN2).toArray(),
         db.collection('reclamacoes_reclameAqui').find(filtroReclameAqui).toArray(),
-        db.collection('reclamacoes_procon').find(filtroProcon).toArray()
+        db.collection('reclamacoes_procon').find(filtroProcon).toArray(),
+        db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
       ]);
 
-      const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs];
+      const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
 
       const porTipo = {
+        N1: calcularStatsPorTipo(n1Docs),
         N2: calcularStatsPorTipo(n2Pix),
         'Reclame Aqui': calcularStatsPorTipo(reclameAquiDocs),
         Bacen: calcularStatsPorTipo(bacen),
@@ -300,11 +316,12 @@ function initStatsRoutes(connectToMongo) {
         n2: n2Pix.filter((r) => r.pixLiberado === true).length,
         ra: reclameAquiDocs.filter((r) => r.pixLiberado === true).length,
         procon: proconDocs.filter((r) => r.pixLiberado === true).length,
+        n1: n1Docs.filter((r) => r.pixLiberado === true).length,
         total: todas.filter((r) => r.pixLiberado === true).length,
       };
       console.log('[STATS_RESULT]', JSON.stringify({
         filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },
-        docsRetornados: { bacen: bacen.length, n2: n2Pix.length, ra: reclameAquiDocs.length, procon: proconDocs.length, total: todas.length },
+        docsRetornados: { bacen: bacen.length, n2: n2Pix.length, ra: reclameAquiDocs.length, procon: proconDocs.length, n1: n1Docs.length, total: todas.length },
         pixLiberadoNoPeriodo: pixLiberadoPorTipo,
         porTipo,
       }));

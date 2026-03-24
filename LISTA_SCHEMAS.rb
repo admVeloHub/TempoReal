@@ -699,6 +699,49 @@ listagem de schema de coleções do mongoDB
   // - email: 1 (índice esparso para buscas por email)
   // - createdAt: -1 (índice para ordenação)
   
+  //schema hub_ouvidoria.reclamações_n1Stats
+  // Sincronizado via webhook Octadesk. Elegível: motivo_2026 = Chave Pix (Ped. Liberação via motivoReduzido).
+  // pixLiberado: detalhe_2026 Liberação Chave Pix + status Resolvido; Retenção Chave Pix + Resolvido → retido (pix false).
+  // Campos de agregação alinhados a calcularStatsPorTipo no backend (motivoReduzido, Finalizado, pixLiberado, produto, dataEntradaN1).
+  {
+  _id: ObjectId,
+  octadeskNumber: Number,           // Number do ticket Octadesk (chave de upsert)
+  cpf: String,                      // CustomField.cpf_do_titular
+  motivo_2026: String,             // Valor bruto Octadesk (elegibilidade: Chave Pix)
+  detalhe_2026: String,            // Valor bruto Octadesk (ex.: Liberação Chave Pix | Retenção Chave Pix)
+  currentStatusName: String,        // CurrentStatusName do payload (ex.: Novo, Resolvido)
+  motivoReduzido: [String],         // Stats / Ped. Liberação: ["Liberação Chave Pix"] quando motivo = Chave Pix
+  pixLiberado: Boolean,             // true só se Resolvido + detalhe Liberação Chave Pix; false se não Resolvido ou Retenção Chave Pix + Resolvido
+  produto: String,                 // CustomField ou TopicName / TopicGroupName (fallback)
+  dataEntradaN1: Date,             // OpenDate do ticket (filtro período no painel)
+  Finalizado: {
+    Resolvido: Boolean,
+    dataResolucao: Date
+  },
+  createdAt: Date,
+  updatedAt: Date
+  }
+  
+  // Índices MongoDB:
+  // - octadeskNumber: 1 (índice único para upsert idempotente)
+  // - dataEntradaN1: 1 (filtro por período)
+  // - updatedAt: -1
+  
+  //schema hub_ouvidoria.octadesk_ingest_log
+  // Log de recebimentos do webhook Octadesk (MVP Observador / diagnóstico). Opcional: TTL em receivedAt.
+  {
+  _id: ObjectId,
+  receivedAt: Date,
+  octadeskNumber: Number,          // null se payload inválido
+  outcome: String,                 // received | upsert | skipped | error
+  message: String,
+  detail: String                   // opcional, texto curto
+  }
+  
+  // Índices MongoDB recomendados:
+  // - receivedAt: -1
+  // - octadeskNumber: 1
+  
   🗄️ Database: velochat
   
   //schema velochat.chat_salas
