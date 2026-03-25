@@ -2,6 +2,23 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-27  
+**Tipo:** Push GitHub  
+**Versão:** App v1.3.2 / auth v1.0.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/services/auth.js` (v1.0.1) — removidos `beforeunload` / `pagehide` que chamavam `registerLogout`; sessão preservada em F5 e navegação (ex. `/observador`)
+- `src/App.js` (v1.3.2) — comentário de doc: sessão em localStorage até logout ou expiração (4h)
+
+### Descrição
+Correção: login não é mais invalidado ao recarregar ou mudar de rota; logout explícito inalterado.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-26  
 **Tipo:** Push GitHub  
 **Versão:** App v1.3.1 / LoginPage v1.0.7 / ObservadorOctadesk v1.2.2  

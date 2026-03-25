@@ -1,9 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.3.1
+ * VERSION: v1.3.2
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
- * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Todo login inicia no padrão (sem persistência).
+ * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Sessão em localStorage até logout ou expiração (4h).
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';

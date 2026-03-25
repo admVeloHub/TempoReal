@@ -1,6 +1,9 @@
 /**
  * Auth Service - Painel Tempo Real
- * VERSION: v1.0.0
+ * VERSION: v1.0.1
+ *
+ * Não chamar logout em beforeunload/pagehide: recarregar ou navegar (/observador) perderia sessionId
+ * e a revalidação na API poderia falhar, apagando o usuário do localStorage.
  */
 
 import { GOOGLE_CONFIG } from '../config/google-config';
@@ -164,17 +167,6 @@ export function logout() {
   localStorage.removeItem(USER_SESSION_KEY);
   window.location.reload();
 }
-
-window.addEventListener('beforeunload', () => {
-  stopHeartbeat();
-  registerLogout();
-});
-window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) {
-    stopHeartbeat();
-    registerLogout();
-  }
-});
 
 export async function checkAuthenticationState() {
   if (!isSessionValid()) {
