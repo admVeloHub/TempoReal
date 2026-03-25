@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - ObservadorOctadesk
- * VERSION: v1.2.0
+ * VERSION: v1.2.2
  *
  * Logs do webhook Octadesk + metadados da API para distinguir lista vazia de falha.
  */
@@ -11,7 +11,7 @@ import { logout } from '../services/auth';
 
 const POLL_MS = 20000;
 
-function ObservadorOctadesk({ userName, userPicture, userEmail }) {
+function ObservadorOctadesk({ userName, userPicture }) {
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,6 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
   };
 
   const apiOk = !error && meta != null;
-  const webhookPublic = apiOk && meta.webhookRequiresSecret === false;
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900 flex flex-col font-[Poppins]">
@@ -87,37 +86,24 @@ function ObservadorOctadesk({ userName, userPicture, userEmail }) {
       </header>
 
       <main className="flex-1 p-4 overflow-auto" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
-        {userEmail && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{userEmail}</p>
-        )}
-
-        {webhookPublic && (
-          <div className="mb-4 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-600">
-            <strong>Webhook sem autenticação por segredo:</strong> qualquer POST JSON em{' '}
-            <code className="text-xs">/api/integrations/octadesk/webhook</code> é processado. Para reduzir abuso, use restrição de
-            rede (Cloud Armor, IP allowlist na Octadesk, etc.) se disponível.
-          </div>
-        )}
-
         {apiOk && (
-          <div className="mb-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-            <p>
-              <span className="font-medium text-gray-800 dark:text-gray-200">Conexão com a API:</span>{' '}
-              <span className="text-green-700 dark:text-green-400">OK</span> — resposta recebida com sucesso.
-            </p>
-            <p>
-              Registros nesta página: <strong>{meta.countReturned}</strong>
-              {meta.approximateTotalInCollection != null && (
-                <> — total aproximado na coleção de logs: <strong>{meta.approximateTotalInCollection}</strong></>
-              )}
-            </p>
-            <p>
+          <div className="mb-3 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">Conexão API:</span>{' '}
+              <span className="text-green-700 dark:text-green-400">OK</span>
+            </span>
+            <span>
+              Registros na página: <strong>{meta.countReturned}</strong>
+            </span>
+            {meta.approximateTotalInCollection != null && (
+              <span>
+                total de logs: <strong>{meta.approximateTotalInCollection}</strong>
+              </span>
+            )}
+            <span>
               Última consulta ao servidor:{' '}
               <strong>{lastFetchAt ? fmtDate(lastFetchAt.toISOString()) : '—'}</strong>
-              {meta.fetchedAt && (
-                <> (horário do servidor: {fmtDate(meta.fetchedAt)})</>
-              )}
-            </p>
+            </span>
           </div>
         )}
 

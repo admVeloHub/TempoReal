@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.3.0
+ * VERSION: v1.3.1
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Todo login inicia no padrão (sem persistência).
@@ -262,11 +262,7 @@ function App() {
 
   if (isObservadorPath()) {
     return (
-      <ObservadorOctadesk
-        userName={userName}
-        userPicture={userPicture}
-        userEmail={userSession?.user?.email}
-      />
+      <ObservadorOctadesk userName={userName} userPicture={userPicture} />
     );
   }
 
@@ -331,7 +327,6 @@ function App() {
               <div className="absolute right-0 mt-1 py-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-50">
                 <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-600">
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{userName}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userSession?.user?.email}</p>
                 </div>
                 <a
                   href="/observador"

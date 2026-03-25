@@ -1,10 +1,10 @@
 /**
  * LoginPage - Painel Tempo Real
- * VERSION: v1.0.6
+ * VERSION: v1.0.7
  * Tela de login com email/senha e Google OAuth.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { saveUserSession, decodeJWT, getSessionId, registerLoginSession } from '../services/auth';
 import { getClientId } from '../config/google-config';
 import { API_BASE_URL } from '../config';
@@ -18,6 +18,34 @@ const GoogleIcon = ({ className = 'h-5 w-5' }) => (
   </svg>
 );
 
+const GSI_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
+
+function loadGsiClientScript() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve();
+      return;
+    }
+    let script = document.querySelector(`script[src="${GSI_SCRIPT_SRC}"]`);
+    const onLoad = () => resolve();
+    const onErr = () => reject(new Error('Falha ao carregar Google Sign-In'));
+    if (!script) {
+      script = document.createElement('script');
+      script.src = GSI_SCRIPT_SRC;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', onLoad, { once: true });
+    script.addEventListener('error', onErr, { once: true });
+    if (window.google?.accounts?.id) {
+      script.removeEventListener('load', onLoad);
+      script.removeEventListener('error', onErr);
+      resolve();
+    }
+  });
+}
+
 const LoginPage = ({ onLoginSuccess }) => {
   const [formAberto, setFormAberto] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,26 +53,30 @@ const LoginPage = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const credentialHandlerRef = useRef(null);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-    script.onload = () => {
-      const clientId = getClientId();
-      if (clientId && window.google?.accounts?.id) {
+    let alive = true;
+    loadGsiClientScript()
+      .then(() => {
+        if (!alive) return;
+        const clientId = getClientId();
+        if (!clientId || !window.google?.accounts?.id) return;
+        if (window.__velohubPainelGsiInited) return;
+        window.__velohubPainelGsiInited = true;
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: handleCredentialResponse,
+          callback: (response) => {
+            const fn = credentialHandlerRef.current;
+            if (fn) fn(response);
+          },
           auto_select: false,
           cancel_on_tap_outside: true,
         });
-      }
-    };
+      })
+      .catch(() => {});
     return () => {
-      if (document.head.contains(script)) document.head.removeChild(script);
+      alive = false;
     };
   }, []);
 
@@ -134,6 +166,8 @@ const LoginPage = ({ onLoginSuccess }) => {
       setIsLoading(false);
     }
   };
+
+  credentialHandlerRef.current = handleCredentialResponse;
 
   const handleEmailPasswordLogin = async (e) => {
     e.preventDefault();

@@ -2,6 +2,24 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-26  
+**Tipo:** Push GitHub  
+**Versão:** App v1.3.1 / LoginPage v1.0.7 / ObservadorOctadesk v1.2.2  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/App.js` (v1.3.1) — menu do usuário sem linha de e-mail (nome já no header)
+- `src/components/LoginPage.js` (v1.0.7) — Google Sign-In: script único, `initialize` uma vez por carga, callback via ref
+- `src/components/ObservadorOctadesk.js` (v1.2.2) — remoção e-mail redundante; barra de status API compacta (v1.2.1); sem aviso de webhook no corpo
+
+### Descrição
+UX: menos duplicação de identidade no header/menu. Login Google: evita aviso GSI por múltiplas chamadas a `initialize` em dev (Strict Mode).
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-25  
 **Tipo:** Push GitHub  
 **Versão:** octadeskIntegration v1.1.0 / octadeskIngest v1.1.0 / Observador v1.2.0 / api v1.3.1  
