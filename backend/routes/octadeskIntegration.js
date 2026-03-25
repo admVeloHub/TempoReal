@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Rotas Octadesk (webhook + logs)
- * VERSION: v1.1.0
+ * VERSION: v1.3.0
  *
  * POST webhook: sem autenticação por segredo (requisito Octadesk). Restrinja por rede/API Gateway se necessário.
  */
@@ -32,7 +32,11 @@ function registerOctadeskRoutes(app, connectToMongo) {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.set('Pragma', 'no-cache');
-      const { items, meta } = await listIngestLogsWithMeta(connectToMongo, req.query.limit);
+      const includePayload =
+        req.query.includePayload === '1' || req.query.includePayload === 'true';
+      const { items, meta } = await listIngestLogsWithMeta(connectToMongo, req.query.limit, {
+        includePayload,
+      });
       return res.json({ success: true, data: { items, meta } });
     } catch (err) {
       console.error('[GET /api/integrations/octadesk/logs]', err);

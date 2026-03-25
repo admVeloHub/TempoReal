@@ -2,6 +2,28 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-28  
+**Tipo:** Push GitHub  
+**Versão:** App v1.3.3 / octadeskIngest v1.3.0 / octadeskIntegration v1.3.0 / HookWebhookOctadesk v1.3.0 / api v1.3.2  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/components/HookWebhookOctadesk.js` (v1.3.0) — rota oculta `/hook`: JSON do POST (payload), polling ~3s, destaque linhas novas; legado `payloadCapturado`
+- `src/App.js` (v1.3.3) — `isHookPath`, render HookWebhookOctadesk
+- `src/services/api.js` (v1.3.2) — `fetchOctadeskIngestLogs(..., { includePayload })`
+- `backend/services/octadeskIngestService.js` (v1.3.0) — `snapshotWebhookBody`; todo `writeIngestLog` com `payload`; lista com `includePayload` e placeholder + `payloadCapturado`
+- `backend/routes/octadeskIntegration.js` (v1.3.0) — query `includePayload`
+- `LISTA_SCHEMAS.rb` — `octadesk_ingest_log.payload` documentado
+- `.env.example` (v1.0.2) / `backend/.env.example` — URL prod Cloud Run e fluxo webhook/front
+
+### Descrição
+Tela `/hook` para inspecionar corpo JSON dos webhooks Octadesk; persistência obrigatória de snapshot do POST nos novos logs; API enriquecida para UI e registros antigos sem corpo.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-27  
 **Tipo:** Push GitHub  
 **Versão:** App v1.3.2 / auth v1.0.1  

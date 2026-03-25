@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.3.2
+ * VERSION: v1.3.3
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Sessão em localStorage até logout ou expiração (4h).
@@ -14,13 +14,21 @@ import AbaRA from './components/AbaRA';
 import AbaAuxiliar from './components/AbaAuxiliar';
 import LoginPage from './components/LoginPage';
 import ObservadorOctadesk from './components/ObservadorOctadesk';
+import HookWebhookOctadesk from './components/HookWebhookOctadesk';
 import { PRODUTOS, MOTIVOS, MultiSelectDropdown } from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
 
+function pathNormalized() {
+  return (window.location.pathname || '/').replace(/\/$/, '') || '/';
+}
+
 function isObservadorPath() {
-  const p = (window.location.pathname || '/').replace(/\/$/, '') || '/';
-  return p === '/observador';
+  return pathNormalized() === '/observador';
+}
+
+function isHookPath() {
+  return pathNormalized() === '/hook';
 }
 
 const DEFAULT_FILTROS = {
@@ -258,6 +266,10 @@ function App() {
 
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
+
+  if (isHookPath()) {
+    return <HookWebhookOctadesk userName={userName} userPicture={userPicture} />;
   }
 
   if (isObservadorPath()) {

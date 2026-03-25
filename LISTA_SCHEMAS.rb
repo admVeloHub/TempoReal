@@ -728,14 +728,16 @@ listagem de schema de coleções do mongoDB
   // - updatedAt: -1
   
   //schema hub_ouvidoria.octadesk_ingest_log
-  // Log de recebimentos do webhook Octadesk (MVP Observador / diagnóstico). Opcional: TTL em receivedAt.
+  // Log de recebimentos do webhook Octadesk (Observador / /hook). Opcional: TTL em receivedAt.
+  // payload: snapshot obrigatório do body do POST (v1.3+); GET /logs?includePayload=1 + payloadCapturado
   {
   _id: ObjectId,
   receivedAt: Date,
   octadeskNumber: Number,          // null se payload inválido
   outcome: String,                 // upsert | skipped | error | unauthorized (POST sem auth válida)
   message: String,
-  detail: String                   // opcional, texto curto
+  detail: String,                  // opcional, texto curto
+  payload: Object                  // cópia JSON do webhook (documentos muito antigos podem não existir no doc)
   }
   
   // Índices MongoDB recomendados:
