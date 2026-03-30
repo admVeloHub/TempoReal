@@ -1,8 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - Octadesk ingest (webhook → MongoDB)
- * VERSION: v1.3.0
+ * VERSION: v1.3.1
  *
- * Regras: motivo_2026 = Chave Pix → registra e alimenta Ped. Liberação (motivoReduzido compatível com stats).
+ * Regras: motivo_2026 = Chave Pix → registra N1; motivoReduzido deriva de detalhe_2026 (só "Liberação Chave Pix" quando detalhe = liberação).
  * Detalhe Liberação Chave Pix + status Resolvido → pixLiberado (mostrador Liberados / “retirado”).
  * Detalhe Retenção Chave Pix + Resolvido → retido (pixLiberado false).
  *
@@ -90,6 +90,19 @@ function computePixLiberado(detalhe2026, resolved) {
 }
 
 /**
+ * Array para stats / filtros: espelha o detalhe Octadesk, não força "Liberação" em todo Chave Pix.
+ * Só inclui "Liberação Chave Pix" quando o detalhe normalizado é liberação (alinhado a calcularStatsPorTipo / motivoContemLiberacaoChavePix).
+ */
+function motivoReduzidoFromDetalhe(detalheRaw) {
+  const dn = normalizeText(detalheRaw);
+  if (dn === DETALHE_LIBERACAO_CHAVE_PIX) return ['Liberação Chave Pix'];
+  if (dn === DETALHE_RETENCAO_CHAVE_PIX) return ['Retenção Chave Pix'];
+  const trimmed = detalheRaw != null ? String(detalheRaw).trim().replace(/\s+/g, ' ') : '';
+  if (trimmed) return [trimmed];
+  return ['Chave Pix'];
+}
+
+/**
  * Monta $set a partir do payload Octadesk + documento existente (dataResolucao preservada quando já resolvido).
  */
 function buildMergedSet(body, existing) {
@@ -132,7 +145,7 @@ function buildMergedSet(body, existing) {
     motivo_2026: cf.motivo_2026 != null ? String(cf.motivo_2026) : '',
     detalhe_2026: detRaw,
     currentStatusName: body.CurrentStatusName != null ? String(body.CurrentStatusName) : '',
-    motivoReduzido: ['Liberação Chave Pix'],
+    motivoReduzido: motivoReduzidoFromDetalhe(detRaw),
     pixLiberado: computePixLiberado(detRaw, resolved),
     dataEntradaN1,
     Finalizado: {

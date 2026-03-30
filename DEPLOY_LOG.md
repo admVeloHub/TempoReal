@@ -2,6 +2,25 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-30 11:05  
+**Tipo:** Push GitHub  
+**Versão:** stats v1.8.6 / DashboardReclamacoes v2.3.0 / octadeskIngestService v1.3.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` (v1.8.6) — Liberação Chave Pix exclusiva (`detalhe_2026` quando preenchido); `pixLiberado` só no universo Liberação; `% Retenção` = retidos / (escalado + retidos); comentários e nomes alinhados à conta literal
+- `src/components/DashboardReclamacoes.js` (v2.3.0) — rótulos (Ocorrências, Escalado N2 N1), layout cards; `% Retenção` no gauge derivado de `pixLiberado` + `pixRetido` exibidos
+- `backend/services/octadeskIngestService.js` (v1.3.1) — `motivoReduzidoFromDetalhe`; `motivoReduzido` espelha detalhe (Liberação / Retenção / texto), não força Liberação em todo Chave Pix
+- `LISTA_SCHEMAS.rb` — comentário `motivoReduzido` em `reclamações_n1Stats` alinhado ao detalhe Octadesk
+
+### Descrição
+Painel tempo real: métricas N1/por tipo coerentes com Liberação Chave Pix; retenção literal e gauge sincronizado com os números do card; ingest N1 alinha `motivoReduzido` ao `detalhe_2026`.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-28  
 **Tipo:** Push GitHub  
 **Versão:** App v1.3.3 / octadeskIngest v1.3.0 / octadeskIntegration v1.3.0 / HookWebhookOctadesk v1.3.0 / api v1.3.2  

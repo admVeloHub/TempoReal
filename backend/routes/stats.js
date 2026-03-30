@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.8.1
+ * VERSION: v1.8.6
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  *
@@ -12,6 +12,8 @@
  * - N1 Octadesk: dataEntradaN1 (reclamações_n1Stats)
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
+ * % Retenção (literal): TOTAL = soma(retidos) + soma(escalado N2); percRetencao = retidos / TOTAL × 100 (Liberação Chave Pix).
+ * solLiberacao / docsLiberacaoChavePix: exclusivamente Liberação Chave Pix; com detalhe_2026 preenchido usa só esse campo (N1 Octadesk).
  */
 
 const express = require('express');
@@ -35,6 +37,31 @@ function motivoContemLiberacaoChavePix(motivoReduzido) {
       String(item).trim().toLowerCase() === MOTIVO_LIBERACAO_CHAVE_PIX ||
       String(item).trim().toLowerCase() === MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO
   );
+}
+
+/** Normalização alinhada a octadeskIngestService (campo detalhe_2026). */
+function normalizarDetalheStats(s) {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+}
+
+const DETALHE_LIBERACAO_CHAVE_PIX_NORM = 'liberacao chave pix';
+
+/**
+ * Universo "Ocorrências" / Liberação Chave Pix: apenas casos de liberação.
+ * Se detalhe_2026 existir e não for vazio, só conta com detalhe normalizado = liberação chave pix (N1).
+ * Caso contrário, match exato em motivoReduzido (demais coleções / legado sem detalhe).
+ */
+function documentoELiberacaoChavePixExclusivo(r) {
+  if (r == null) return false;
+  const det = r.detalhe_2026;
+  if (det != null && String(det).trim() !== '') {
+    return normalizarDetalheStats(det) === DETALHE_LIBERACAO_CHAVE_PIX_NORM;
+  }
+  return motivoContemLiberacaoChavePix(r.motivoReduzido);
 }
 
 /**
@@ -196,17 +223,25 @@ function calcularStatsPorTipo(docs) {
     (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
   )).length;
 
-  const solLiberacao = docs.filter((r) => motivoContemLiberacaoChavePix(r.motivoReduzido)).length;
+  const docsLiberacaoChavePix = docs.filter((r) => documentoELiberacaoChavePixExclusivo(r));
+  const solLiberacao = docsLiberacaoChavePix.length;
 
-  const docsLiberacaoChavePix = docs.filter((r) => motivoContemLiberacaoChavePix(r.motivoReduzido));
-  const pixLiberado = docs.filter((r) => r.pixLiberado === true).length;
-  const pixRetido = docsLiberacaoChavePix.filter(
+  /* % Retenção — conta literal (só Liberação Chave Pix):
+   * TOTAL = soma(retidos) + soma(escalado N2)
+   * percRetencao = (retidos / TOTAL) × 100  → quanto % do TOTAL é retido */
+  const somaEscaladoN2 = docsLiberacaoChavePix.filter((r) => r.pixLiberado === true).length;
+  const somaRetidos = docsLiberacaoChavePix.filter(
     (r) => documentoResolvidoParaMetricas(r) && r.pixLiberado === false
   ).length;
+
+  const totalRetidosMaisEscaladoN2 = somaRetidos + somaEscaladoN2;
   const percRetencao =
-    docsLiberacaoChavePix.length > 0
-      ? Math.round((pixRetido / docsLiberacaoChavePix.length) * 1000) / 10
+    totalRetidosMaisEscaladoN2 > 0
+      ? Math.round((somaRetidos / totalRetidosMaisEscaladoN2) * 1000) / 10
       : 0;
+
+  const pixLiberado = somaEscaladoN2;
+  const pixRetido = somaRetidos;
 
   const taxaResolucao = ocorrencias > 0 ? Math.round((resolvido / ocorrencias) * 1000) / 10 : 0;
 
@@ -312,12 +347,12 @@ function initStatsRoutes(connectToMongo) {
       };
 
       const pixLiberadoPorTipo = {
-        bacen: bacen.filter((r) => r.pixLiberado === true).length,
-        n2: n2Pix.filter((r) => r.pixLiberado === true).length,
-        ra: reclameAquiDocs.filter((r) => r.pixLiberado === true).length,
-        procon: proconDocs.filter((r) => r.pixLiberado === true).length,
-        n1: n1Docs.filter((r) => r.pixLiberado === true).length,
-        total: todas.filter((r) => r.pixLiberado === true).length,
+        bacen: bacen.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        n2: n2Pix.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        ra: reclameAquiDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        procon: proconDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        n1: n1Docs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        total: todas.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
       };
       console.log('[STATS_RESULT]', JSON.stringify({
         filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },

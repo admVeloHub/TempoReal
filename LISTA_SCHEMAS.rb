@@ -710,7 +710,7 @@ listagem de schema de coleções do mongoDB
   motivo_2026: String,             // Valor bruto Octadesk (elegibilidade: Chave Pix)
   detalhe_2026: String,            // Valor bruto Octadesk (ex.: Liberação Chave Pix | Retenção Chave Pix)
   currentStatusName: String,        // CurrentStatusName do payload (ex.: Novo, Resolvido)
-  motivoReduzido: [String],         // Stats / Ped. Liberação: ["Liberação Chave Pix"] quando motivo = Chave Pix
+  motivoReduzido: [String],         // Deriva do detalhe_2026 (ex.: Liberação | Retenção | texto Octadesk); só "Liberação Chave Pix" quando detalhe = liberação
   pixLiberado: Boolean,             // true só se Resolvido + detalhe Liberação Chave Pix; false se não Resolvido ou Retenção Chave Pix + Resolvido
   produto: String,                 // CustomField ou TopicName / TopicGroupName (fallback)
   dataEntradaN1: Date,             // OpenDate do ticket (filtro período no painel)

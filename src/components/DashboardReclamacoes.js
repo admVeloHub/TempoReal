@@ -1,9 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.2.0
+ * VERSION: v2.3.0
  *
  * Painel executivo + cards por canal. Em Aberto/Resolvido não exibidos (dados mantidos para Taxa Resolução).
- * Pedidos Liberação = solLiberacao. Paleta LAYOUT_GUIDELINES.
+ * Ocorrências (painel) = solLiberacao. Paleta LAYOUT_GUIDELINES.
+ * % Retenção no gauge = retidos / (pixLiberado + pixRetido) × 100 — derivado dos mesmos números exibidos no card.
  */
 
 import React from 'react';
@@ -30,6 +31,15 @@ const CANAIS = [
   { key: 'Procon', label: 'Procon', iconSrc: `${BASE_ICONS}/icon procon.png`, cor: CORES.yellow },
   { key: 'N2', label: 'N2', iconSrc: `${BASE_ICONS}/icon n2.png`, cor: CORES.blueMedium },
 ];
+
+/** TOTAL = escalado (pixLiberado) + retidos; % = retidos / TOTAL × 100 (1 decimal). */
+function percRetencaoLiteral(pixLiberado, pixRetido) {
+  const e = Number(pixLiberado) || 0;
+  const r = Number(pixRetido) || 0;
+  const t = e + r;
+  if (t <= 0) return 0;
+  return Math.round((r / t) * 1000) / 10;
+}
 
 /* ========== GAUGE CIRCULAR (VELOCÍMETRO) ========== */
 function GaugeCircular({ valor, max = 100, cor = CORES.blueMedium, size = 64 }) {
@@ -85,6 +95,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
   const getDados = (key) => porTipo[key] || {};
 
   const total = porTipo.Total || {};
+  const percTotalRetencao = percRetencaoLiteral(total.pixLiberado, total.pixRetido);
   const hexToRgba = (hex, alpha = 0.20) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -135,29 +146,23 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
           }}
         >
         <div className="flex flex-col gap-2">
-          {/* Linha 1: 4 mostradores numéricos */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {/* Linha 1: 3 mostradores numéricos */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Total Ocorrências</div>
-              <div className="flex-1 flex items-center justify-center">
-                <span className="text-3xl font-bold" style={{ color: CORES.blueDark }}>{total.ocorrencias ?? 0}</span>
-              </div>
-            </div>
-            <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Pedidos Liberação</div>
-              <div className="flex-1 flex items-center justify-center">
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Ocorrências</div>
+              <div className="flex items-center justify-center py-1">
                 <span className="text-3xl font-bold" style={{ color: CORES.blueDark }}>{total.solLiberacao ?? 0}</span>
               </div>
             </div>
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Liberados</div>
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex items-center justify-center py-1">
                 <span className="text-3xl font-bold" style={{ color: '#c0392b' }}>{total.pixLiberado ?? 0}</span>
               </div>
             </div>
-            <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
+            <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px] col-span-2 md:col-span-1" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Retidos</div>
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex items-center justify-center py-1">
                 <span className="text-3xl font-bold" style={{ color: CORES.green }}>{total.pixRetido ?? 0}</span>
               </div>
             </div>
@@ -167,7 +172,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[120px]" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">% Retenção</div>
               <div className="flex-1 flex items-center justify-center">
-                <GaugeCircular valor={total.percRetencao ?? 0} cor={total.percRetencao > 5 ? CORES.yellow : CORES.blueMedium} size={92} />
+                <GaugeCircular valor={percTotalRetencao} cor={percTotalRetencao > 5 ? CORES.yellow : CORES.blueMedium} size={92} />
               </div>
             </div>
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[120px]" style={{ borderColor: CORES.blueMedium }}>
@@ -188,11 +193,12 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
       <section className="shrink-0 grid grid-cols-5 gap-3 min-w-0 overflow-x-auto mt-4">
         {CANAIS.map((canal, idx) => {
           const dados = getDados(canal.key);
+          const percRetCard = percRetencaoLiteral(dados.pixLiberado, dados.pixRetido);
           const bgRgba = hexToRgba(canal.cor);
           return (
             <div
               key={canal.key}
-              className="rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg flex flex-col min-w-0 min-h-[400px]"
+              className="rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg flex flex-col min-w-0"
               style={{
                 backgroundColor: 'var(--cor-card, #F3F7FC)',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
@@ -204,18 +210,14 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 <img src={canal.iconSrc} alt="" className="shrink-0 object-contain" style={{ width: 64, height: 64 }} />
                 <span className="font-[Anton] text-lg truncate" style={{ color: CORES.blueMedium }}>{canal.label}</span>
               </div>
-              <div className="flex-1 py-5 px-4 space-y-4 flex flex-col justify-between">
+              <div className="py-5 px-4 flex flex-col gap-4">
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Ocorrências</span>
-                    <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.ocorrencias ?? 0}</span>
+                    <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.solLiberacao ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Ped. Liberação</span>
-                    <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.solLiberacao ?? 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Liberados</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">{canal.key === 'N1' ? 'Escalado N2' : 'Liberados'}</span>
                     <span className="text-base font-semibold" style={{ color: '#c0392b' }}>{dados.pixLiberado ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -225,7 +227,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 </div>
                 <div className="flex flex-col items-center pt-2 pb-1 border-t shrink-0" style={{ borderColor: 'rgba(22, 52, 255, 0.1)' }}>
                   <span className="text-xs text-gray-600 dark:text-gray-400 mb-1">% Retenção</span>
-                  <GaugeCircular valor={dados.percRetencao ?? 0} cor={dados.percRetencao > 5 ? CORES.yellow : canal.cor} size={88} />
+                  <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
                 </div>
               </div>
             </div>
