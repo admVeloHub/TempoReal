@@ -2,6 +2,22 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-31 16:59  
+**Tipo:** Push GitHub  
+**Versão:** DashboardReclamacoes v2.3.7  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/components/DashboardReclamacoes.js` (v2.3.7) — card N1: % Retenção calculada de novo (`retidos ÷ solLiberacao` só com dados N1); removida `percRetencaoLiteral` não usada
+
+### Descrição
+Gauge de retenção no canal N1 alinhado aos demais; painel executivo continua sem N1 na agregação.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-31 16:24  
 **Tipo:** Push GitHub  
 **Versão:** stats v1.8.7 / DashboardReclamacoes v2.3.6 / LoginPage v1.0.9  

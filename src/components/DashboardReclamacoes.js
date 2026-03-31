@@ -1,10 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.3.6
+ * VERSION: v2.3.7
  *
  * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
  * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
- * % Retenção (painel adm e cards RA/Bacen/Procon/N2): retidos ÷ ocorrências (solLiberacao) × 100. Card N1: sem gauge. Paleta LAYOUT_GUIDELINES.
+ * % Retenção em cada card (incl. N1): retidos ÷ ocorrências (solLiberacao) só com dados daquele canal. Painel adm: agregado sem N1. Paleta LAYOUT_GUIDELINES.
  */
 
 import React from 'react';
@@ -38,18 +38,6 @@ function percRetencaoSobreOcorrencias(retidos, ocorrenciasSolLiberacao) {
   const r = Number(retidos) || 0;
   if (o <= 0) return 0;
   return Math.round((r / o) * 1000) / 10;
-}
-
-/**
- * Assinatura legada (liberados, retidos) — retidos / (liberados + retidos).
- * Mantida para não quebrar HMR/bundle antigo; o painel usa só percRetencaoSobreOcorrencias.
- */
-function percRetencaoLiteral(pixLiberado, pixRetido) {
-  const e = Number(pixLiberado) || 0;
-  const r = Number(pixRetido) || 0;
-  const t = e + r;
-  if (t <= 0) return 0;
-  return Math.round((r / t) * 1000) / 10;
 }
 
 /** Alinhado a stats.js: resolvido / ocorrencias × 100 (1 decimal). */
@@ -226,10 +214,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
       <section className="shrink-0 grid grid-cols-5 gap-3 min-w-0 overflow-x-auto mt-4">
         {CANAIS.map((canal, idx) => {
           const dados = getDados(canal.key);
-          const percRetCard =
-            canal.key === 'N1'
-              ? null
-              : percRetencaoSobreOcorrencias(dados.pixRetido, dados.solLiberacao);
+          const percRetCard = percRetencaoSobreOcorrencias(dados.pixRetido, dados.solLiberacao);
           const bgRgba = hexToRgba(canal.cor);
           return (
             <div
@@ -263,13 +248,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 </div>
                 <div className="flex flex-col items-center pt-2 pb-1 border-t shrink-0" style={{ borderColor: 'rgba(22, 52, 255, 0.1)' }}>
                   <span className="text-xs text-gray-600 dark:text-gray-400 mb-1">% Retenção</span>
-                  {percRetCard == null ? (
-                    <div className="flex items-center justify-center min-h-[88px] w-full">
-                      <span className="text-lg font-semibold text-gray-400 dark:text-gray-500">—</span>
-                    </div>
-                  ) : (
-                    <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
-                  )}
+                  <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
                 </div>
               </div>
             </div>
