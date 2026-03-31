@@ -2,6 +2,25 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-31 16:24  
+**Tipo:** Push GitHub  
+**Versão:** stats v1.8.7 / DashboardReclamacoes v2.3.6 / LoginPage v1.0.9  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` (v1.8.7) — `percRetencao` = `pixRetido / solLiberacao × 100` (agregado alinhado a retidos ÷ ocorrências Liberação Chave Pix)
+- `src/components/DashboardReclamacoes.js` (v2.3.6) — % Retenção: retidos ÷ `solLiberacao` no executivo e nos cards; painel adm sem N1; card N1 sem gauge; `percRetencaoLiteral` mantida só para compatibilidade HMR
+- `src/components/LoginPage.js` (v1.0.9) — fundo fixo em camada, cor base `#000058`, query string de revisão no asset de background
+- `public/login background.png` — arte atualizada do login
+
+### Descrição
+Retenção no painel e na API unificada como retidos sobre ocorrências (universo Liberação Chave Pix). Login: layout de fundo full-screen e bust de cache do PNG.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-31 15:16  
 **Tipo:** Push GitHub  
 **Versão:** DashboardReclamacoes v2.3.1  

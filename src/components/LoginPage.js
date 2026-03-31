@@ -1,6 +1,6 @@
 /**
  * LoginPage - Painel Tempo Real
- * VERSION: v1.0.7
+ * VERSION: v1.0.9
  * Tela de login com email/senha e Google OAuth.
  */
 
@@ -8,6 +8,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { saveUserSession, decodeJWT, getSessionId, registerLoginSession } from '../services/auth';
 import { getClientId } from '../config/google-config';
 import { API_BASE_URL } from '../config';
+
+/** Aumente ao substituir `public/login background.png` para forçar o navegador a baixar o arquivo novo (cache). */
+const LOGIN_BACKGROUND_ASSET_REVISION = '202603312';
 
 const GoogleIcon = ({ className = 'h-5 w-5' }) => (
   <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -207,16 +210,23 @@ const LoginPage = ({ onLoginSuccess }) => {
     }
   };
 
+  const loginBackgroundStyle = {
+    backgroundImage: `url(/login%20background.png?v=${LOGIN_BACKGROUND_ASSET_REVISION})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center center',
+    backgroundRepeat: 'no-repeat',
+    /* Tom escuro da marca: evita “barras” claras nas laterais se houver qualquer folga. */
+    backgroundColor: '#000058',
+  };
+
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-end pb-12 bg-gray-100 dark:bg-gray-900"
-      style={{
-        backgroundImage: 'url(/login%20background.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundColor: '#f3f4f6',
-      }}
-    >
+    <div className="relative w-full min-h-screen overflow-x-hidden">
+      <div
+        className="fixed inset-0 z-0"
+        style={loginBackgroundStyle}
+        aria-hidden
+      />
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-end pb-12">
       {!formAberto ? (
         <button
           type="button"
@@ -227,7 +237,7 @@ const LoginPage = ({ onLoginSuccess }) => {
           <img src="/botão.png" alt="Acessar" className="h-auto w-auto max-h-20 md:max-h-24" />
         </button>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 p-4">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
           <div className="max-w-md w-full">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 relative">
               <button
@@ -333,6 +343,7 @@ const LoginPage = ({ onLoginSuccess }) => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

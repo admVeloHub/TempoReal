@@ -1,11 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.3.1
+ * VERSION: v2.3.6
  *
- * Painel executivo + cards por canal. Em Aberto/Resolvido não exibidos (dados mantidos para Taxa Resolução).
- * Ocorrências (painel) = solLiberacao. Paleta LAYOUT_GUIDELINES.
- * % Retenção no gauge = retidos / (pixLiberado + pixRetido) × 100 — derivado dos mesmos números exibidos no card.
- * Painel executivo — mostrador Liberados: exclui N1 (Escalado N2); cards por canal inalterados.
+ * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
+ * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
+ * % Retenção (painel adm e cards RA/Bacen/Procon/N2): retidos ÷ ocorrências (solLiberacao) × 100. Card N1: sem gauge. Paleta LAYOUT_GUIDELINES.
  */
 
 import React from 'react';
@@ -33,13 +32,32 @@ const CANAIS = [
   { key: 'N2', label: 'N2', iconSrc: `${BASE_ICONS}/icon n2.png`, cor: CORES.blueMedium },
 ];
 
-/** TOTAL = escalado (pixLiberado) + retidos; % = retidos / TOTAL × 100 (1 decimal). */
+/** % Retenção: retidos ÷ ocorrências (solLiberacao), 1 decimal. */
+function percRetencaoSobreOcorrencias(retidos, ocorrenciasSolLiberacao) {
+  const o = Number(ocorrenciasSolLiberacao) || 0;
+  const r = Number(retidos) || 0;
+  if (o <= 0) return 0;
+  return Math.round((r / o) * 1000) / 10;
+}
+
+/**
+ * Assinatura legada (liberados, retidos) — retidos / (liberados + retidos).
+ * Mantida para não quebrar HMR/bundle antigo; o painel usa só percRetencaoSobreOcorrencias.
+ */
 function percRetencaoLiteral(pixLiberado, pixRetido) {
   const e = Number(pixLiberado) || 0;
   const r = Number(pixRetido) || 0;
   const t = e + r;
   if (t <= 0) return 0;
   return Math.round((r / t) * 1000) / 10;
+}
+
+/** Alinhado a stats.js: resolvido / ocorrencias × 100 (1 decimal). */
+function taxaResolucaoLiteral(resolvido, ocorrencias) {
+  const o = Number(ocorrencias) || 0;
+  const r = Number(resolvido) || 0;
+  if (o <= 0) return 0;
+  return Math.round((r / o) * 1000) / 10;
 }
 
 /* ========== GAUGE CIRCULAR (VELOCÍMETRO) ========== */
@@ -96,9 +114,21 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
   const getDados = (key) => porTipo[key] || {};
 
   const total = porTipo.Total || {};
-  const pixLiberadoN1Escalado = Number(getDados('N1').pixLiberado) || 0;
-  const liberadosPainelExecutivo = Math.max(0, (Number(total.pixLiberado) || 0) - pixLiberadoN1Escalado);
-  const percTotalRetencao = percRetencaoLiteral(total.pixLiberado, total.pixRetido);
+  const n1 = getDados('N1');
+  const n1Sol = Number(n1.solLiberacao) || 0;
+  const n1PixL = Number(n1.pixLiberado) || 0;
+  const n1PixR = Number(n1.pixRetido) || 0;
+  const n1Res = Number(n1.resolvido) || 0;
+  const n1Occ = Number(n1.ocorrencias) || 0;
+
+  const ocorrenciasPainelExecutivo = Math.max(0, (Number(total.solLiberacao) || 0) - n1Sol);
+  const liberadosPainelExecutivo = Math.max(0, (Number(total.pixLiberado) || 0) - n1PixL);
+  const retidosPainelExecutivo = Math.max(0, (Number(total.pixRetido) || 0) - n1PixR);
+  const percTotalRetencao = percRetencaoSobreOcorrencias(retidosPainelExecutivo, ocorrenciasPainelExecutivo);
+
+  const ocorrenciasDocsExecutivo = Math.max(0, (Number(total.ocorrencias) || 0) - n1Occ);
+  const resolvidoExecutivo = Math.max(0, (Number(total.resolvido) || 0) - n1Res);
+  const taxaResolucaoExecutivo = taxaResolucaoLiteral(resolvidoExecutivo, ocorrenciasDocsExecutivo);
   const hexToRgba = (hex, alpha = 0.20) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -154,7 +184,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Ocorrências</div>
               <div className="flex items-center justify-center py-1">
-                <span className="text-3xl font-bold" style={{ color: CORES.blueDark }}>{total.solLiberacao ?? 0}</span>
+                <span className="text-3xl font-bold" style={{ color: CORES.blueDark }}>{ocorrenciasPainelExecutivo}</span>
               </div>
             </div>
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px]" style={{ borderColor: CORES.blueMedium }}>
@@ -166,7 +196,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[88px] col-span-2 md:col-span-1" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Retidos</div>
               <div className="flex items-center justify-center py-1">
-                <span className="text-3xl font-bold" style={{ color: CORES.green }}>{total.pixRetido ?? 0}</span>
+                <span className="text-3xl font-bold" style={{ color: CORES.green }}>{retidosPainelExecutivo}</span>
               </div>
             </div>
           </div>
@@ -181,7 +211,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
             <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[120px]" style={{ borderColor: CORES.blueMedium }}>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Taxa de Resolução</div>
               <div className="flex-1 flex items-center justify-center">
-                <GaugeCircular valor={total.taxaResolucao ?? 0} cor={total.taxaResolucao >= 90 ? CORES.green : CORES.blueMedium} size={92} />
+                <GaugeCircular valor={taxaResolucaoExecutivo} cor={taxaResolucaoExecutivo >= 90 ? CORES.green : CORES.blueMedium} size={92} />
               </div>
             </div>
           </div>
@@ -196,7 +226,10 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
       <section className="shrink-0 grid grid-cols-5 gap-3 min-w-0 overflow-x-auto mt-4">
         {CANAIS.map((canal, idx) => {
           const dados = getDados(canal.key);
-          const percRetCard = percRetencaoLiteral(dados.pixLiberado, dados.pixRetido);
+          const percRetCard =
+            canal.key === 'N1'
+              ? null
+              : percRetencaoSobreOcorrencias(dados.pixRetido, dados.solLiberacao);
           const bgRgba = hexToRgba(canal.cor);
           return (
             <div
@@ -230,7 +263,13 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 </div>
                 <div className="flex flex-col items-center pt-2 pb-1 border-t shrink-0" style={{ borderColor: 'rgba(22, 52, 255, 0.1)' }}>
                   <span className="text-xs text-gray-600 dark:text-gray-400 mb-1">% Retenção</span>
-                  <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
+                  {percRetCard == null ? (
+                    <div className="flex items-center justify-center min-h-[88px] w-full">
+                      <span className="text-lg font-semibold text-gray-400 dark:text-gray-500">—</span>
+                    </div>
+                  ) : (
+                    <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
+                  )}
                 </div>
               </div>
             </div>

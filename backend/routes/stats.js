@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.8.6
+ * VERSION: v1.8.7
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  *
@@ -12,7 +12,7 @@
  * - N1 Octadesk: dataEntradaN1 (reclamações_n1Stats)
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
- * % Retenção (literal): TOTAL = soma(retidos) + soma(escalado N2); percRetencao = retidos / TOTAL × 100 (Liberação Chave Pix).
+ * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0.
  * solLiberacao / docsLiberacaoChavePix: exclusivamente Liberação Chave Pix; com detalhe_2026 preenchido usa só esse campo (N1 Octadesk).
  */
 
@@ -226,22 +226,15 @@ function calcularStatsPorTipo(docs) {
   const docsLiberacaoChavePix = docs.filter((r) => documentoELiberacaoChavePixExclusivo(r));
   const solLiberacao = docsLiberacaoChavePix.length;
 
-  /* % Retenção — conta literal (só Liberação Chave Pix):
-   * TOTAL = soma(retidos) + soma(escalado N2)
-   * percRetencao = (retidos / TOTAL) × 100  → quanto % do TOTAL é retido */
   const somaEscaladoN2 = docsLiberacaoChavePix.filter((r) => r.pixLiberado === true).length;
   const somaRetidos = docsLiberacaoChavePix.filter(
     (r) => documentoResolvidoParaMetricas(r) && r.pixLiberado === false
   ).length;
 
-  const totalRetidosMaisEscaladoN2 = somaRetidos + somaEscaladoN2;
-  const percRetencao =
-    totalRetidosMaisEscaladoN2 > 0
-      ? Math.round((somaRetidos / totalRetidosMaisEscaladoN2) * 1000) / 10
-      : 0;
-
   const pixLiberado = somaEscaladoN2;
   const pixRetido = somaRetidos;
+  const percRetencao =
+    solLiberacao > 0 ? Math.round((pixRetido / solLiberacao) * 1000) / 10 : 0;
 
   const taxaResolucao = ocorrencias > 0 ? Math.round((resolvido / ocorrencias) * 1000) / 10 : 0;
 
