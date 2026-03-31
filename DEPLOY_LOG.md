@@ -2,6 +2,22 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-03-31 15:16  
+**Tipo:** Push GitHub  
+**Versão:** DashboardReclamacoes v2.3.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/components/DashboardReclamacoes.js` (v2.3.1) — painel executivo: mostrador Liberados exclui `pixLiberado` do N1 (Escalado N2); cards por canal inalterados
+
+### Descrição
+Visão geral administrativa: Liberados agrega só Bacen, RA, Procon e N2; N1 permanece apenas no card Escalado N2.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-03-30 11:05  
 **Tipo:** Push GitHub  
 **Versão:** stats v1.8.6 / DashboardReclamacoes v2.3.0 / octadeskIngestService v1.3.1  
