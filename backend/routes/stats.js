@@ -1,6 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.8.7
+ * VERSION: v1.12.3
+ *
+ * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
  *
  * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
  *
@@ -13,12 +15,18 @@
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
  * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0.
- * solLiberacao / docsLiberacaoChavePix: exclusivamente Liberação Chave Pix; com detalhe_2026 preenchido usa só esse campo (N1 Octadesk).
+ * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas (octadeskIngestService v1.7+); legado outras coleções: detalhe_2026 ou motivoReduzido.
+ * Filtro motivo em N1: motivoReduzido e libera_o_chave_pix (regex).
+ * Filtro produto: campo produto em todas as coleções; ingest N1 grava produto = libera_o_chave_pix (sem tradução no stats).
+ * emAberto (N1 e demais): !Finalizado.Resolvido; N1 Octadesk só "Resolvido" grava Resolvido true no ingest.
  */
 
 const express = require('express');
 const router = express.Router();
-const { N1_STATS_COLLECTION } = require('../services/octadeskIngestService');
+const {
+  N1_STATS_COLLECTION,
+  motivoN1ContaComoLiberacaoParaMetricas,
+} = require('../services/octadeskIngestService');
 
 const MOTIVO_LIBERACAO_CHAVE_PIX = 'liberação chave pix';
 const MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO = 'liberacao chave pix';
@@ -39,6 +47,29 @@ function motivoContemLiberacaoChavePix(motivoReduzido) {
   );
 }
 
+/** Normaliza motivo para comparar "Cancelamento 7 dias" vs "Cancelamento até 7 dias" (acentos irrelevantes). */
+function canonMotivoOpCancelada7Dias(valor) {
+  return String(valor)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ');
+}
+
+/** Grafias aceitas após normalização (até → ate). */
+const MOTIVOS_OP_CANCELADA_CANON = new Set(['cancelamento 7 dias', 'cancelamento ate 7 dias']);
+
+/** motivoReduzido como array ou string: contém item de operação cancelada 7 dias (vide formulário N2). */
+function motivoContemCancelamento7Dias(motivoReduzido) {
+  const itens = Array.isArray(motivoReduzido)
+    ? motivoReduzido
+    : motivoReduzido != null && motivoReduzido !== ''
+      ? [String(motivoReduzido)]
+      : [];
+  return itens.some((item) => MOTIVOS_OP_CANCELADA_CANON.has(canonMotivoOpCancelada7Dias(item)));
+}
+
 /** Normalização alinhada a octadeskIngestService (campo detalhe_2026). */
 function normalizarDetalheStats(s) {
   return String(s ?? '')
@@ -51,12 +82,23 @@ function normalizarDetalheStats(s) {
 const DETALHE_LIBERACAO_CHAVE_PIX_NORM = 'liberacao chave pix';
 
 /**
- * Universo "Ocorrências" / Liberação Chave Pix: apenas casos de liberação.
- * Se detalhe_2026 existir e não for vazio, só conta com detalhe normalizado = liberação chave pix (N1).
- * Caso contrário, match exato em motivoReduzido (demais coleções / legado sem detalhe).
+ * Universo "Ocorrências" / Liberação Chave Pix.
+ * N1 (octadeskNumber): mesma regra que o ingest (motivoN1ContaComoLiberacaoParaMetricas).
+ * Outras coleções: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
  */
 function documentoELiberacaoChavePixExclusivo(r) {
   if (r == null) return false;
+  const n1 =
+    r.octadeskNumber != null &&
+    String(r.octadeskNumber).trim() !== '' &&
+    !Number.isNaN(Number(r.octadeskNumber));
+  const mcp = r.motivos_chave_pix;
+  if (n1) {
+    return motivoN1ContaComoLiberacaoParaMetricas(mcp);
+  }
+  if (mcp != null && String(mcp).trim() !== '') {
+    return normalizarDetalheStats(mcp) === DETALHE_LIBERACAO_CHAVE_PIX_NORM;
+  }
   const det = r.detalhe_2026;
   if (det != null && String(det).trim() !== '') {
     return normalizarDetalheStats(det) === DETALHE_LIBERACAO_CHAVE_PIX_NORM;
@@ -119,6 +161,23 @@ function criarFiltroMotivo(motivos) {
   const condicoes = valores.map(m => {
     const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return { motivoReduzido: { $regex: escaped, $options: 'i' } };
+  });
+  return condicoes.length === 1 ? condicoes[0] : { $or: condicoes };
+}
+
+/** N1 Octadesk: motivoReduzido espelha libera_o_chave_pix; inclui match direto no campo para legado/consultas. */
+function criarFiltroMotivoN1(motivos) {
+  if (!motivos || !Array.isArray(motivos) || motivos.length === 0) return {};
+  const valores = motivos.filter((m) => m && String(m).trim()).map((m) => String(m).trim());
+  if (valores.length === 0) return {};
+  const condicoes = valores.map((m) => {
+    const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return {
+      $or: [
+        { motivoReduzido: { $regex: escaped, $options: 'i' } },
+        { libera_o_chave_pix: { $regex: escaped, $options: 'i' } },
+      ],
+    };
   });
   return condicoes.length === 1 ? condicoes[0] : { $or: condicoes };
 }
@@ -251,6 +310,15 @@ function calcularStatsPorTipo(docs) {
   };
 }
 
+/** Mostradores adicionais dos cards ouvidoria (Bacen, N2, RA, Procon): LISTA_SCHEMAS semRespostaCliente + motivo cancelamento 7 dias. */
+function enrichComMostradoresOuvidoria(baseStats, docs) {
+  const semResposta = docs.filter(
+    (r) => documentoResolvidoParaMetricas(r) && r.semRespostaCliente === true
+  ).length;
+  const opCancelada = docs.filter((r) => motivoContemCancelamento7Dias(r.motivoReduzido)).length;
+  return { ...baseStats, semResposta, opCancelada };
+}
+
 /**
  * GET /api/stats
  * Query params: dataInicio, dataFim, produto (array), motivo (array)
@@ -296,6 +364,7 @@ function initStatsRoutes(connectToMongo) {
 
       const filtroProduto = criarFiltroProduto(produtos);
       const filtroMotivo = criarFiltroMotivo(motivos);
+      const filtroMotivoN1 = criarFiltroMotivoN1(motivos);
 
       const filtroDataBacen = criarFiltroDataPorCollection('reclamacoes_bacen', dataInicio, dataFim);
       const filtroDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
@@ -307,7 +376,7 @@ function initStatsRoutes(connectToMongo) {
       const filtroN2 = mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
-      const filtroN1 = mesclarFiltros(filtroDataN1, filtroProduto, filtroMotivo);
+      const filtroN1 = mesclarFiltros(filtroDataN1, filtroProduto, filtroMotivoN1);
 
       console.log('[STATS_FILTROS]', {
         camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'dataEntradaN1' },
@@ -332,10 +401,10 @@ function initStatsRoutes(connectToMongo) {
 
       const porTipo = {
         N1: calcularStatsPorTipo(n1Docs),
-        N2: calcularStatsPorTipo(n2Pix),
-        'Reclame Aqui': calcularStatsPorTipo(reclameAquiDocs),
-        Bacen: calcularStatsPorTipo(bacen),
-        Procon: calcularStatsPorTipo(proconDocs),
+        N2: enrichComMostradoresOuvidoria(calcularStatsPorTipo(n2Pix), n2Pix),
+        'Reclame Aqui': enrichComMostradoresOuvidoria(calcularStatsPorTipo(reclameAquiDocs), reclameAquiDocs),
+        Bacen: enrichComMostradoresOuvidoria(calcularStatsPorTipo(bacen), bacen),
+        Procon: enrichComMostradoresOuvidoria(calcularStatsPorTipo(proconDocs), proconDocs),
         Total: calcularStatsPorTipo(todas),
       };
 

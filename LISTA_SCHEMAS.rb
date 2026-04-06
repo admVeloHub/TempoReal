@@ -1,9 +1,8 @@
 listagem de schema de coleções do mongoDB
-  <!-- VERSION: v4.6.2 | DATE: 2026-03-06 | AUTHOR: VeloHub Development Team -->
-    <!-- FONTE DA VERDADE - Versão única e definitiva -->
-     
-    🗄️ Database Principal: console_conteudo
-  
+  <!-- VERSION: v4.16.7 | DATE: 2026-04-06 | AUTHOR: VeloHub Development Team -->
+ 
+    🗄️ Database: console_conteudo
+   
   //schema console_conteudo.Artigos
   {
   _id: ObjectId,
@@ -15,6 +14,14 @@ listagem de schema de coleções do mongoDB
   media: Array,                    // Array de imagens/vídeos [{ url: String, data: String (base64), type: String, name: String }]
   createdAt: Date,                // Data de criação
   updatedAt: Date                 // Data de atualização
+  }
+  
+  //schema console_conteudo.artigos_categorias (singleton: um único documento; API GET/PUT /api/artigos-categorias)
+  {
+  _id: ObjectId,
+  Categorias: Array,              // [{ Ordem: Number, categoria_id: String (snake_case), categoria_titulo: String }, ...]
+  createdAt: Date,
+  updatedAt: Date
   }
   
   //schema console_conteudo.Bot_perguntas
@@ -231,15 +238,17 @@ listagem de schema de coleções do mongoDB
   
    //schema console_config.module_status
   {
-  _id: "status",
-  _trabalhador: String,    // Status do Crédito Trabalhador
-  _pessoal: String,        // Status do Crédito Pessoal  
-  _antecipacao: String,    // Status da Antecipação
-  _pgtoAntecip: String,    // Status do Pagamento Antecipado
-  _irpf: String,           // Status do Módulo IRPF
-  _seguro: String,         // Status do Módulo Seguro
-  createdAt: Date,         // Data de criação
-  updatedAt: Date          // Data de atualização
+  _id: ObjectId,
+  _pessoal: String,
+  _antecipacao: String,
+  _pgtoAntecip: String,
+  _seguroCred: String,
+  _seguroCel: String,
+  _perdaRenda: String,
+  _cupons: String,
+  _seguroPessoal: String,
+  createdAt: Date,
+  updatedAt: Date
   }
   
   
@@ -293,11 +302,15 @@ listagem de schema de coleções do mongoDB
   userMail: String,               // Email do usuário (para autenticação SSO)
   atuacao: [ObjectId],            // Array de referências para qualidade_funcoes
   escala: String,                 // Escala
-  acessos: {                      // Objeto com acessos aos módulos
+  acessos: {                      // Objeto com acessos aos módulos (API/validação: QualidadeFuncionario)
     Velohub: Boolean,             // Acesso ao VeloHub (pré-requisito para outros módulos)
+    Console: Boolean,             // Acesso ao Console de conteúdo
     Ouvidoria: Boolean,           // Acesso ao módulo Ouvidoria (requer Velohub === true)
+    Sociais: Boolean,             // Acesso ao módulo Sociais (requer Velohub === true)
     Academy: Boolean,             // Acesso ao Academy
-    Desk: Boolean                 // Acesso ao Desk
+    Desk: Boolean,                // Acesso ao Desk
+    realTime: Boolean             // Acesso ao módulo Tempo Real (rótulo no produto: “Tempo Real”; mesmo campo nas rotas POST/PUT /api/qualidade/funcionarios)
+    apoioN1: Boolean              // Credencial Apoio N1 (rótulo no produto: “Apoio N1”; POST/PUT /api/qualidade/funcionarios; formato legado array: sistema normalizado “apoion1”)
   },
   desligado: Boolean,             // Se foi desligado
   dataDesligamento: Date,         // Data de desligamento
@@ -454,9 +467,99 @@ listagem de schema de coleções do mongoDB
   version: Number              // Controle de versão
   }
   
+  🗄️ Database: hub_escalacoes
+  
+  //schema hub_escalacoes.solicitacoes_tecnicas
+  // Módulo Req_Prod (Requisições de Produto) - sem integração WhatsApp
+  // Status do chamado: derivado do último elemento de reply[].status
+  // Na criação: reply inicia com [{ status: "enviado", msgProdutos: null, msgN1: null, at }]
+  // Produtos responde: msgProdutos preenchido, msgN1 null | N1 responde: msgN1 preenchido, msgProdutos null
+  {
+  _id: ObjectId,
+  colaboradorNome: String,          // Nome do colaborador (agente)
+  cpf: String,                      // CPF (11 dígitos, sem formatação)
+  tipo: String,                     // Tipo de solicitação
+  payload: {                        // Objeto com dados adicionais
+    agente: String,
+    cpf: String,
+    tipo: String,
+    imagens: [{ nome: String, imagemUrl: String }],   // nome do arquivo, URL de download no GCS
+    videos: [{ nome: String, videoUrl: String }]      // nome do arquivo, URL de download no GCS
+  },
+  reply: [{
+    status: String,                 // "enviado" | "feito" | "não feito" | "Cancelado"
+    msgProdutos: String | null,     // Time Produtos: texto da resposta; null se vazio / cancelamento / quando quem falou foi só o N1
+    msgN1: String | null,           // N1: texto; null se vazio / cancelamento / quando quem falou foi só Produtos
+    at: Date                        // Data/hora do envio daquele item (Produtos ou N1, conforme o campo preenchido)
+  }],
+  createdAt: Date,
+  updatedAt: Date
+  }
+  
+  //schema hub_escalacoes.erros_bugs
+  // Erros e bugs do módulo Req_Prod - sem integração WhatsApp
+  // Status do chamado: derivado do último elemento de reply[].status
+  // Na criação: reply inicia com [{ status: "enviado", msgProdutos: null, msgN1: null, at }]
+  // Produtos responde: msgProdutos preenchido, msgN1 null, at = data/hora do envio | N1: msgN1 preenchido, msgProdutos null
+  {
+  _id: ObjectId,
+  colaboradorNome: String,
+  cpf: String,
+  tipo: String,                     // Ex: "Erro/Bug - ..."
+  payload: {
+    agente: String,
+    cpf: String,
+    tipo: String,                   // Tipo sem prefixo
+    descricao: String,
+    marca: String,
+    modelo: String,
+    imagens: [{ nome: String, imagemUrl: String }],   // nome do arquivo, URL de download no GCS
+    videos: [{ nome: String, videoUrl: String }],     // nome do arquivo, URL de download no GCS
+    exclusao: Object | undefined    // Exclusão de Conta: excluirVelotax, excluirCelcoin, etc.
+  },
+  reply: [{
+    status: String,                 // "enviado" | "feito" | "não feito" | "Cancelado"
+    msgProdutos: String | null,     // Time Produtos: texto da resposta; null se vazio / cancelamento / quando quem falou foi só o N1
+    msgN1: String | null,           // N1: texto; null se vazio / cancelamento / quando quem falou foi só Produtos
+    at: Date                        // Data/hora do envio daquele item (Produtos ou N1, conforme o campo preenchido)
+  }],
+  createdAt: Date,
+  updatedAt: Date
+  }
+  
+  🗄️ Database: console_sociais
+  
+  //schema console_sociais.sociais_metricas
+  // Tabulações de redes sociais (módulo Sociais)
+  {
+  _id: ObjectId,
+  clientName: String,               // Nome ou username do cliente
+  socialNetwork: String,            // Enum: 'WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'Messenger', 'YouTube', 'PlayStore'
+  messageText: String,              // O texto da mensagem/atendimento
+  rating: Integer,                  // Classificação de 1 a 5 estrelas (Obrigatório se PlayStore)
+  contactReason: String,            // Enum: 'Produto', 'Suporte', 'Bug', 'Elogio', 'Reclamação', 'Oculto', 'Outro'
+  sentiment: String,                // Enum: 'Positivo', 'Negativo', 'Neutro'
+  directedCenter: Boolean,          // true se foi direcionado para a central, false se não
+  link: String,                     // URL ou link do atendimento (opcional)
+  createdAt: Date,                  // Data de criação
+  updatedAt: Date                   // Data de atualização
+  }
+  
+  // Índices MongoDB recomendados:
+  // - socialNetwork: 1
+  // - createdAt: -1
+  // - sentiment: 1
+  // - contactReason: 1
+  
   🗄️ Database: hub_ouvidoria
   
-  //schema hub_ouvidoria.reclamacoes_bacen  
+  // NOTA IMPORTANTE (2026-03-02):
+  // motivoReduzido foi padronizado como [String] em TODAS as collections de ouvidoria
+  // Todas as collections (BACEN, N2 Pix, Reclame Aqui, Procon, Ação Judicial) agora usam array
+  // para permitir seleção múltipla de motivos no formulário (conforme funcionalidade implementada)
+  // Migração executada: 2371 documentos migrados de String para [String]
+  
+  //schema hub_ouvidoria.reclamacoes_bacen
   {
   _id: ObjectId,                    // ID gerado automaticamente pelo MongoDB
   nome: String,                     // Nome do cliente
@@ -471,8 +574,8 @@ listagem de schema de coleções do mongoDB
   origem: String,                   // Natureza: "Bacen Celcoin", "Bacen Via Capital", "Consumidor.Gov"
   produto: String,                   // Produto relacionado (opcional)
   anexos: [String],                 // Array de URLs dos anexos no Cloud Storage (mediabank_velohub/anexos_ouvidoria/bacen)
-  prazoBacen: Date,                 // Prazo BACEN (obrigatório se origem = "Consumidor.Gov")
-  motivoReduzido: String,           // Motivo reduzido (select)
+  prazoBacen: Date,                 // Prazo BACEN — preenchido apenas na API: createdAt + 2 dias corridos (UTC); não editável no formulário
+  motivoReduzido: [String],         // Motivo reduzido (array de motivos selecionados - múltipla escolha)
   motivoDetalhado: String,          // Descrição detalhada da reclamação
   tentativasContato: {              // Objeto com lista de tentativas de contato
     lista: [{
@@ -489,6 +592,7 @@ listagem de schema de coleções do mongoDB
   protocolosReclameAqui: [String],  // Array de protocolos Reclame Aqui
   procon: Boolean,                  // Se acionou Procon
   protocolosProcon: [String],       // Array de protocolos Procon
+  semRespostaCliente: Boolean,      // Sem resposta do cliente (Canais de atendimento e protocolos acionados)
   pixLiberado: Boolean,             // PIX liberado (true = Liberado/Excluído/Solicitada; false = Não aplicável/vazio)
   statusContratoQuitado: Boolean,   // Se contrato está quitado
   statusContratoAberto: Boolean,    // Se contrato está em aberto
@@ -522,7 +626,7 @@ listagem de schema de coleções do mongoDB
   motivoReduzido: [String],         // Motivo reduzido (array de motivos selecionados - múltipla escolha)
   origem: String,                   // Origem: "Telefone", "Ticket", "Chatbot" (opcional)
   produto: String,                  // Produto relacionado (opcional)
-  prazoOuvidoria: Date,             // Prazo Ouvidoria (opcional)
+  prazoOuvidoria: Date,             // Prazo N2/Ouvidoria — preenchido apenas na API: createdAt + 2 dias corridos (UTC); não editável no formulário
   motivoDetalhado: String,          // Descrição detalhada (opcional)
   anexos: [String],                 // Array de URLs dos anexos no Cloud Storage (mediabank_velohub/anexos_ouvidoria/ouvidoria)
   tentativasContato: {              // Objeto com lista de tentativas de contato
@@ -541,6 +645,7 @@ listagem de schema de coleções do mongoDB
   protocolosReclameAqui: [String],  // Array de protocolos Reclame Aqui
   procon: Boolean,                  // Se acionou Procon
   protocolosProcon: [String],       // Array de protocolos Procon
+  semRespostaCliente: Boolean,      // Sem resposta do cliente (Canais de atendimento e protocolos acionados)
   pixLiberado: Boolean,             // PIX liberado (true = Liberado/Excluído/Solicitada; false = Não aplicável/vazio)
   statusContratoQuitado: Boolean,   // Se contrato está quitado
   enviarParaCobranca: Boolean,      // Se deve enviar para cobrança
@@ -570,10 +675,10 @@ listagem de schema de coleções do mongoDB
   observacoes: String,              // Observações gerais (opcional)
   responsavel: String,              // Nome do responsável pela reclamação
   
-  // Campos específicos reclamacoes_reclameAqui
   cpfRepetido: String,              // CPF Repetido (campo digitável para valores numéricos) (L1C4)
   idEntrada: String,                // ID Entrada (campo digitável, 9 dígitos numéricos) (L1C1)
   dataReclam: Date,                 // Data Reclamação (L1C3)
+  produto: String,                  // Produto relacionado 
   motivoReduzido: [String],         // Motivo reduzido (array de motivos selecionados - múltipla escolha) (L2C1)
   motivoDetalhado: String,          // Descrição detalhada (opcional)
   passivelNotaMais: Boolean,        // Passível de nota + (campo booleano)
@@ -585,15 +690,16 @@ listagem de schema de coleções do mongoDB
   solicitadoAvaliacao: Boolean,     // Solicitado Avaliação (boolean, abaixo do Descrição)
   avaliado: Boolean,                // Avaliado (boolean, abaixo do Descrição, à direita do Solicitado Avaliação)
   
-  // Tratativa N1: Canais de atendimento e protocolos acionados (mesma estrutura dos outros formulários)
   acionouCentral: Boolean,          // Se acionou Central de Ajuda
   protocolosCentral: [String],      // Array de protocolos da Central de Ajuda
   n2SegundoNivel: Boolean,          // Se foi escalado para Ouvidoria
   protocolosN2: [String],           // Array de protocolos N2/Ouvidoria
-  reclameAqui: Boolean,             // Se acionou Reclame Aqui
+  bacen: Boolean,                  // Se acionou Bacen
+  protocolosBacen: [String],       // Array de protocolos Bacen
   protocolosReclameAqui: [String],  // Array de protocolos Reclame Aqui
   procon: Boolean,                  // Se acionou Procon
   protocolosProcon: [String],       // Array de protocolos Procon
+  semRespostaCliente: Boolean,      // Sem resposta do cliente (Canais de atendimento e protocolos acionados)
   Finalizado: {                     // Objeto de finalização (opcional)
     Resolvido: Boolean,             // Se a reclamação foi resolvida (se vazio/null = em andamento)
     dataResolucao: Date             // Timestamp da resolução (preenchido quando Resolvido = true)
@@ -624,6 +730,7 @@ listagem de schema de coleções do mongoDB
   
   codigoProcon: String,            // Código Procon (campo de múltiplos caracteres, validação para 16 caracteres) (L1C1)
   dataProcon: Date,                // Data Procon (L1C2)
+  origem: String,                   // Origem: "Procon" ou "Consumidor.gov"
   produto: String,                  // Produto relacionado (mesmos valores de N2) (L1C3)
   motivoReduzido: [String],         // Motivo reduzido (array de motivos selecionados - múltipla escolha, mesmos valores de N2) (L2C1)
   motivoDetalhado: String,          // Descrição detalhada (L3C1)
@@ -645,6 +752,7 @@ listagem de schema de coleções do mongoDB
   protocolosReclameAqui: [String],  // Array de protocolos Reclame Aqui
   pixLiberado: Boolean,             // PIX liberado (preenchido por Localizar Atendimentos a partir de BACEN)
   statusContratoQuitado: Boolean,   // Se contrato está quitado (preenchido por Localizar Atendimentos a partir de BACEN)
+  semRespostaCliente: Boolean,      // Sem resposta do cliente (Canais de atendimento e protocolos acionados)
   Finalizado: {                     // Objeto de finalização (opcional)
     Resolvido: Boolean,             // Se a reclamação foi resolvida (se vazio/null = em andamento)
     dataResolucao: Date             // Timestamp da resolução (preenchido quando Resolvido = true)
@@ -699,50 +807,26 @@ listagem de schema de coleções do mongoDB
   // - email: 1 (índice esparso para buscas por email)
   // - createdAt: -1 (índice para ordenação)
   
-  //schema hub_ouvidoria.reclamações_n1Stats
-  // Sincronizado via webhook Octadesk. Elegível: motivo_2026 = Chave Pix (Ped. Liberação via motivoReduzido).
-  // pixLiberado: detalhe_2026 Liberação Chave Pix + status Resolvido; Retenção Chave Pix + Resolvido → retido (pix false).
-  // Campos de agregação alinhados a calcularStatsPorTipo no backend (motivoReduzido, Finalizado, pixLiberado, produto, dataEntradaN1).
+  //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1)
   {
   _id: ObjectId,
-  octadeskNumber: Number,           // Number do ticket Octadesk (chave de upsert)
-  cpf: String,                      // CustomField.cpf_do_titular
-  motivo_2026: String,             // Valor bruto Octadesk (elegibilidade: Chave Pix)
-  detalhe_2026: String,            // Valor bruto Octadesk (ex.: Liberação Chave Pix | Retenção Chave Pix)
-  currentStatusName: String,        // CurrentStatusName do payload (ex.: Novo, Resolvido)
-  motivoReduzido: [String],         // Deriva do detalhe_2026 (ex.: Liberação | Retenção | texto Octadesk); só "Liberação Chave Pix" quando detalhe = liberação
-  pixLiberado: Boolean,             // true só se Resolvido + detalhe Liberação Chave Pix; false se não Resolvido ou Retenção Chave Pix + Resolvido
-  produto: String,                 // CustomField ou TopicName / TopicGroupName (fallback)
-  dataEntradaN1: Date,             // OpenDate do ticket (filtro período no painel)
-  Finalizado: {
-    Resolvido: Boolean,
-    dataResolucao: Date
-  },
+  octadeskNumber: Number,           // Ticket Octadesk (único); no POST do webhook vem como Number (JSON raiz)
+  cpf: String,                     // Origem CustomField cpf_do_titular no webhook
+  motivos_chave_pix: String,      // Webhook N1 (octadeskIngest v1.9+): grava só se critério estrito (aliases MOTIVO_LIBERACAO_FRASES_NORM; sem tópico/heurística ampla). Métricas N1 também usam motivoN1ContaComoLiberacaoParaMetricas
+  libera_o_chave_pix: String,     // Único critério de produto; mesmo valor em produto; webhook sempre grava (vazio permitido)
+  escalar_chamado: String,        // CustomField escalar_chamado quando a chave vem no POST (String ou null; não entra no critério skipped/upsert)
+  motivo_2026: String,            // Legado: ingest N1 v1.7.6+ não preenche (string vazia); métricas N1 usam motivos_chave_pix
+  detalhe_2026: String,           // Legado: idem; não é critério N1
+  motivoReduzido: [String],       // Tipicamente [libera_o_chave_pix]; stats / filtro motivo
+  currentStatusName: String,      // Octadesk: só "Resolvido" → Finalizado.Resolvido; Novo, Pendente, Em Andamento → em aberto
+  retido_no_atendimento: Boolean, // Único critério retido vs liberado (espelho CustomField); upsert atualiza se mudar
+  pixLiberado: Boolean,           // !retido_no_atendimento (somente esse campo)
+  produto: String,                // Somente libera_o_chave_pix (sem tópico/outros campos)
+  dataEntradaN1: Date,
+  Finalizado: { Resolvido: Boolean, dataResolucao: Date },
   createdAt: Date,
   updatedAt: Date
   }
-  
-  // Índices MongoDB:
-  // - octadeskNumber: 1 (índice único para upsert idempotente)
-  // - dataEntradaN1: 1 (filtro por período)
-  // - updatedAt: -1
-  
-  //schema hub_ouvidoria.octadesk_ingest_log
-  // Log de recebimentos do webhook Octadesk (Observador / /hook). Opcional: TTL em receivedAt.
-  // payload: snapshot obrigatório do body do POST (v1.3+); GET /logs?includePayload=1 + payloadCapturado
-  {
-  _id: ObjectId,
-  receivedAt: Date,
-  octadeskNumber: Number,          // null se payload inválido
-  outcome: String,                 // upsert | skipped | error | unauthorized (POST sem auth válida)
-  message: String,
-  detail: String,                  // opcional, texto curto
-  payload: Object                  // cópia JSON do webhook (documentos muito antigos podem não existir no doc)
-  }
-  
-  // Índices MongoDB recomendados:
-  // - receivedAt: -1
-  // - octadeskNumber: 1
   
   🗄️ Database: velochat
   

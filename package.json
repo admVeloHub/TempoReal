@@ -19,7 +19,8 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "backend": "cd backend && npm start"
+    "backend": "cd backend && npm start",
+    "dev:backend": "cd backend && npm start"
   },
   "browserslist": {
     "production": [

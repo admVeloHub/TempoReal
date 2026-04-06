@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - FiltrosAuxiliar
- * VERSION: v1.0.0
+ * VERSION: v1.2.0
  *
  * Seção de filtros compartilhada: início, fim, produto, motivo, Atualizar.
  */
@@ -8,8 +8,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const PRODUTOS = [
-  { label: 'Antecipação 2026', value: 'Antecipação 2026' },
-  { label: 'Antecipação Outros Anos', value: 'Antecipacao' },
+  { label: 'Antecipação - 2026', value: 'Antecipação - 2026' },
+  { label: 'Antecipação - Outros Anos', value: 'Antecipação - Outros Anos' },
+  { label: 'Antecipação 2026 (legado)', value: 'Antecipação 2026' },
+  { label: 'Antecipação Outros Anos (legado)', value: 'Antecipacao' },
   { label: 'Aplicativo', value: 'Aplicativo' },
   { label: 'Conta Celcoin', value: 'Conta Celcoin' },
   { label: 'Cupom', value: 'Cupom' },
@@ -21,6 +23,8 @@ const PRODUTOS = [
 
 const MOTIVOS = [
   'Abatimento de juros',
+  'Antecipação - 2026',
+  'Antecipação - Outros Anos',
   'Cancelamento',
   'Cobrança',
   'Encerramento de conta',

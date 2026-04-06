@@ -4,13 +4,17 @@
   "description": "Backend Painel Reclamações Tempo Real",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "reset:ingest": "node scripts/resetOctadeskIngest.js",
+    "ingest:log": "node scripts/ingestLogExportReplay.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "luxon": "^3.7.2",
     "mongodb": "^6.3.0",
+    "node-cron": "^4.2.1",
     "uuid": "^13.0.0"
   },
   "engines": {

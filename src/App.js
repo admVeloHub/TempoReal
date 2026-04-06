@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.3.3
+ * VERSION: v1.3.5
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Sessão em localStorage até logout ou expiração (4h).
@@ -31,8 +31,9 @@ function isHookPath() {
   return pathNormalized() === '/hook';
 }
 
+/** Produto: N1 grava "Antecipação - 2026"; Bacen/N2/RA/Procon legado costuma usar "Antecipação 2026". Ambos no default evita painel vazio. */
 const DEFAULT_FILTROS = {
-  produtos: ['Antecipação 2026'],
+  produtos: ['Antecipação - 2026', 'Antecipação 2026'],
   motivos: [],
   dataInicio: '2026-01-01',
   dataFim: '',

@@ -1,8 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - HookWebhookOctadesk
- * VERSION: v1.3.0
+ * VERSION: v1.4.6
  *
- * Rota oculta /hook: cada POST; expandir = JSON retornado em payload (corpo Octadesk ou aviso legado).
+ * /hook lista octadesk_ingest_log: cada linha = resultado do backend que recebeu o POST (veja coluna Instância).
+ * POST: /api/integrations/octadesk/webhook; segredo opcional (OCTADESK_WEBHOOK_SECRET).
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -128,6 +129,16 @@ function HookWebhookOctadesk({ userName, userPicture }) {
     }
   };
 
+  const formatDetail = (detail) => {
+    if (detail == null || detail === '') return null;
+    const s = String(detail).trim();
+    try {
+      return JSON.stringify(JSON.parse(s), null, 2);
+    } catch {
+      return s;
+    }
+  };
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-100 dark:bg-gray-900 flex flex-col font-[Poppins]">
       <header className="w-full bg-white dark:bg-gray-800 shadow py-2 px-4 shrink-0 flex items-center justify-between gap-4">
@@ -140,7 +151,7 @@ function HookWebhookOctadesk({ userName, userPicture }) {
             Voltar ao painel
           </a>
           <h1 className="text-base font-semibold text-gray-800 dark:text-gray-100 truncate">
-            Webhook Octadesk — payload do POST
+            Histórico Octadesk (ingest_log) — payload quando capturado
           </h1>
           <span
             className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 shrink-0"
@@ -170,11 +181,19 @@ function HookWebhookOctadesk({ userName, userPicture }) {
       </header>
 
       <main className="flex-1 p-4 overflow-auto" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          Rota oculta <code className="text-[11px]">/hook</code>. Cada linha é um POST em{' '}
-          <code className="text-[11px]">/api/integrations/octadesk/webhook</code>. Ao expandir: <strong>JSON do corpo</strong> que a Octadesk enviou (servidor
-          v1.3+). Registros antigos sem corpo guardado mostram um JSON de aviso até novos eventos após deploy.
-        </p>
+        <div className="text-xs text-gray-600 dark:text-gray-400 mb-3 space-y-2">
+          <p>
+            Rota oculta <code className="text-[11px]">/hook</code>. Cada linha é um registro em{' '}
+            <code className="text-[11px]">octadesk_ingest_log</code> no Mongo — ou seja, o efeito do processamento HTTP do{' '}
+            <strong>servidor que recebeu</strong> o webhook (coluna <em>Instância</em>), não “do React na porta 5000” por si só.
+            Se o Octadesk estiver configurado com URL do Cloud Run, quem grava o log e o N1 é o Cloud Run; o navegador local só lê o mesmo banco.
+            Para testar <strong>este</strong> projeto de ponta a ponta, o POST precisa bater no backend que você subiu (ex.: túnel apontando para a sua máquina ou URL local).
+          </p>
+          <p className="text-gray-500 dark:text-gray-500">
+            Octadesk → <code className="text-[11px]">POST /api/integrations/octadesk/webhook</code> (JSON do ticket). Segredo opcional:{' '}
+            <code className="text-[11px]">OCTADESK_WEBHOOK_SECRET</code> via header ou <code className="text-[11px]">?octadesk_webhook_key=</code>.
+          </p>
+        </div>
 
         {apiOk && (
           <div className="mb-3 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -199,6 +218,26 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                 ? `pausado (~${POLL_HIDDEN_MS / 1000}s) — aba em segundo plano`
                 : `polling ${POLL_VISIBLE_MS / 1000}s`}
             </span>
+            {meta.webhookRequiresSecret ? (
+              <span className="text-amber-800 dark:text-amber-300/90">
+                Backend exige OCTADESK_WEBHOOK_SECRET via header ou query octadesk_webhook_key.
+              </span>
+            ) : (
+              <span className="text-gray-500 dark:text-gray-500">
+                Webhook sem verificação de header neste ambiente (OCTADESK_WEBHOOK_SECRET vazio).
+              </span>
+            )}
+            {meta.processorTagThisApi != null && meta.processorTagThisApi !== '' ? (
+              <span className="text-gray-700 dark:text-gray-300" title="Quem responde GET /api/integrations/octadesk/logs">
+                Esta API: <code className="text-[11px]">{meta.processorTagThisApi}</code>
+                {meta.ingestServiceVersionThisApi ? (
+                  <>
+                    {' '}
+                    · ingest <code className="text-[11px]">{meta.ingestServiceVersionThisApi}</code>
+                  </>
+                ) : null}
+              </span>
+            ) : null}
           </div>
         )}
 
@@ -217,6 +256,7 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                 <th className="p-2 w-10 font-medium text-gray-700 dark:text-gray-300" aria-label="Expandir" />
                 <th className="p-2 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Recebido</th>
                 <th className="p-2 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Ticket #</th>
+                <th className="p-2 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap min-w-[7rem]">Instância</th>
                 <th className="p-2 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Processamento</th>
               </tr>
             </thead>
@@ -225,6 +265,10 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                 const isOpen = expanded.has(row.id);
                 const capturado = row.payloadCapturado !== false;
                 const isFlashing = flashIds.has(row.id);
+                const foreignProcessor =
+                  meta?.processorTagThisApi &&
+                  row.processedBy &&
+                  row.processedBy !== meta.processorTagThisApi;
                 return (
                   <React.Fragment key={row.id}>
                     <tr
@@ -250,6 +294,22 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                         {fmtDate(row.receivedAt)}
                       </td>
                       <td className="p-2 font-mono text-gray-800 dark:text-gray-200 align-top">{row.octadeskNumber ?? '—'}</td>
+                      <td className="p-2 align-top text-[11px] text-gray-700 dark:text-gray-300 max-w-[12rem]">
+                        <span className="break-words font-mono">{row.processedBy || '—'}</span>
+                        {row.ingestServiceVersion ? (
+                          <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
+                            {row.ingestServiceVersion}
+                          </div>
+                        ) : null}
+                        {foreignProcessor ? (
+                          <div
+                            className="text-[10px] text-amber-800 dark:text-amber-300 mt-1 font-medium"
+                            title="Registro gerado por outro host que recebeu o POST; não é necessariamente esta API."
+                          >
+                            ≠ esta API
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="p-2 align-top">
                         <span
                           className="inline-block px-2 py-0.5 rounded text-xs font-medium"
@@ -278,7 +338,7 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                     </tr>
                     {isOpen && (
                       <tr className="border-b border-gray-200 dark:border-gray-600 bg-slate-50 dark:bg-slate-900/40">
-                        <td colSpan={4} className="p-3 align-top">
+                        <td colSpan={5} className="p-3 align-top">
                           {!capturado ? (
                             <p className="text-xs text-amber-800 dark:text-amber-200/90 mb-2 font-medium">
                               Abaixo não é o POST da Octadesk — é só aviso: este registro foi salvo sem o corpo. Faça deploy do backend v1.3+ e aguarde novos
@@ -296,6 +356,16 @@ function HookWebhookOctadesk({ userName, userPicture }) {
                               }
                             )}
                           </pre>
+                          {row.detail ? (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Detail (critérios no servidor que processou o webhook)
+                              </div>
+                              <pre className="text-[11px] leading-relaxed overflow-x-auto max-h-[min(40vh,16rem)] overflow-y-auto p-3 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20 text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+                                {formatDetail(row.detail) ?? row.detail}
+                              </pre>
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     )}

@@ -1,5 +1,24 @@
 # Deploy Log - Painel Tempo Real
 
+## GCP Cloud Run
+
+**Data/Hora:** 2026-04-06 15:06  
+**Tipo:** Deploy GCP Cloud Run (Cloud Build)  
+**Serviço / imagem:** `tempo-real-api` (`gcr.io/$PROJECT_ID/tempo-real-api:$SHORT_SHA`)  
+**Região (substituição cloudbuild):** southamerica-east1  
+**Comando (raiz do repo):** `gcloud builds submit --config=cloudbuild.yaml .`
+
+### Versões / foco deste deploy
+- `backend/services/octadeskIngestService.js` **v1.9.6** — POST `/api/integrations/octadesk/webhook`, N1 upsert/skipped, `processedBy` + `ingestServiceVersion` no `octadesk_ingest_log`, decisão de motivo sem heurística ampla no webhook, `detail` JSON em skip
+- `backend/routes/octadeskIntegration.js` **v1.6.3**, `backend/server.js` **v1.4.9**, `backend/services/octadeskIngestTailService.js` **v1.0.0** (tail opcional), scripts `ingestLogExportReplay.js`
+- `src/components/HookWebhookOctadesk.js` **v1.4.6** — coluna Instância, meta `processorTagThisApi`, texto explicando Mongo vs quem recebe o POST
+- `LISTA_SCHEMAS.rb`, `backend/.env.example` — documentação webhook / segredo / tail / `OCTADESK_INGEST_PROCESSOR_TAG`
+
+### Descrição
+Deploy para validar em produção o ingest Octadesk N1 (`reclamações_n1Stats` + log com rastreio de instância). Após o build: disparar webhook de teste ou atualizar ticket; conferir `/hook` (Instância = Cloud Run) e Mongo N1.
+
+---
+
 ## GitHub Push
 
 **Data/Hora:** 2026-03-31 16:59  

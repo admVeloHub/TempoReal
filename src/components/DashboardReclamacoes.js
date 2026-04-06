@@ -1,8 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.3.7
+ * VERSION: v2.5.0
  *
  * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
+ * N1: Ocorrências, Escalado N2, Retidos, Em Aberto (status ≠ Resolvido no Octadesk).
+ * Bacen, RA, Procon e N2: Sem Resposta, Op. Cancelada, Em Aberto.
  * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
  * % Retenção em cada card (incl. N1): retidos ÷ ocorrências (solLiberacao) só com dados daquele canal. Painel adm: agregado sem N1. Paleta LAYOUT_GUIDELINES.
  */
@@ -188,19 +190,15 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
               </div>
             </div>
           </div>
-          {/* Linha 2: 2 mostradores com termômetro */}
+          {/* Linha 2: 2 mostradores com termômetro (rótulo à esquerda, gauge à direita) */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[120px]" style={{ borderColor: CORES.blueMedium }}>
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">% Retenção</div>
-              <div className="flex-1 flex items-center justify-center">
-                <GaugeCircular valor={percTotalRetencao} cor={percTotalRetencao > 5 ? CORES.yellow : CORES.blueMedium} size={92} />
-              </div>
+            <div className="rounded-lg py-2 px-3 flex items-center justify-between gap-2 border bg-white min-h-0 w-full" style={{ borderColor: CORES.blueMedium }}>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 leading-tight text-left">% Retenção</span>
+              <GaugeCircular valor={percTotalRetencao} cor={percTotalRetencao > 5 ? CORES.yellow : CORES.blueMedium} size={82} />
             </div>
-            <div className="rounded-lg py-3 px-4 flex flex-col border bg-white min-h-[120px]" style={{ borderColor: CORES.blueMedium }}>
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 text-center">Taxa de Resolução</div>
-              <div className="flex-1 flex items-center justify-center">
-                <GaugeCircular valor={taxaResolucaoExecutivo} cor={taxaResolucaoExecutivo >= 90 ? CORES.green : CORES.blueMedium} size={92} />
-              </div>
+            <div className="rounded-lg py-2 px-3 flex items-center justify-between gap-2 border bg-white min-h-0 w-full" style={{ borderColor: CORES.blueMedium }}>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 leading-tight text-left">Taxa de Resolução</span>
+              <GaugeCircular valor={taxaResolucaoExecutivo} cor={taxaResolucaoExecutivo >= 90 ? CORES.green : CORES.blueMedium} size={82} />
             </div>
           </div>
         </div>
@@ -231,24 +229,51 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 <img src={canal.iconSrc} alt="" className="shrink-0 object-contain" style={{ width: 64, height: 64 }} />
                 <span className="font-[Anton] text-lg truncate" style={{ color: CORES.blueMedium }}>{canal.label}</span>
               </div>
-              <div className="py-5 px-4 flex flex-col gap-4">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
+              <div className="py-3 px-3 flex flex-col gap-2">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Ocorrências</span>
                     <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.solLiberacao ?? 0}</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">{canal.key === 'N1' ? 'Escalado N2' : 'Liberados'}</span>
                     <span className="text-base font-semibold" style={{ color: '#c0392b' }}>{dados.pixLiberado ?? 0}</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Retidos</span>
                     <span className="text-base font-semibold" style={{ color: CORES.green }}>{dados.pixRetido ?? 0}</span>
                   </div>
+                  {canal.key === 'N1' && (
+                    <div className="flex justify-between items-center gap-2 min-h-0">
+                      <span className="text-xs text-gray-600 dark:text-gray-400">Em Aberto</span>
+                      <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.emAberto ?? 0}</span>
+                    </div>
+                  )}
+                  {canal.key !== 'N1' && (
+                    <>
+                      <div className="flex justify-between items-center gap-2 min-h-0">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Sem Resposta</span>
+                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.semResposta ?? 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 min-h-0">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Op. Cancelada</span>
+                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.opCancelada ?? 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 min-h-0">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Em Aberto</span>
+                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.emAberto ?? 0}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="flex flex-col items-center pt-2 pb-1 border-t shrink-0" style={{ borderColor: 'rgba(22, 52, 255, 0.1)' }}>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 mb-1">% Retenção</span>
-                  <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={88} />
+                <div
+                  className="flex items-center justify-between gap-2 w-full min-w-0 pt-1 border-t shrink-0"
+                  style={{ borderColor: 'rgba(22, 52, 255, 0.1)' }}
+                >
+                  <span className="text-xs text-gray-600 dark:text-gray-400 leading-tight text-left shrink-0">% Retenção</span>
+                  <div className="shrink-0 flex items-center">
+                    <GaugeCircular valor={percRetCard} cor={percRetCard > 5 ? CORES.yellow : canal.cor} size={68} />
+                  </div>
                 </div>
               </div>
             </div>
