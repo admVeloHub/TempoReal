@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - AbaRA
- * VERSION: v1.0.13
+ * VERSION: v1.0.14
  *
  * Aba RA com filtros: início, fim, produto, motivo.
  * Gráfico e tabelas compartilhados via ConteudoAuxiliar.
@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchStatsRA } from '../services/api';
-import FiltrosAuxiliar from './FiltrosAuxiliar';
+import FiltrosAuxiliar, { expandProdutosFiltroParaApi } from './FiltrosAuxiliar';
 import ConteudoAuxiliar from './ConteudoAuxiliar';
 
 function AbaRA({ refreshTrigger = 0 }) {
@@ -27,7 +27,8 @@ function AbaRA({ refreshTrigger = 0 }) {
       const params = {};
       if (dataInicio) params.dataInicio = dataInicio;
       if (dataFim) params.dataFim = dataFim;
-      if (produtos.length > 0) params.produtos = produtos;
+      const produtosApi = expandProdutosFiltroParaApi(produtos);
+      if (produtosApi.length > 0) params.produtos = produtosApi;
       if (motivos.length > 0) params.motivos = motivos;
       const res = await fetchStatsRA(params);
       setStats(res.data);

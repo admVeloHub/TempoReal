@@ -1,31 +1,39 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.12.3
+ * VERSION: v1.19.1
  *
  * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
  *
- * GET /: query params dataInicio, dataFim, produto, motivo. Defaults: dataInicio 2026-01-01, dataFim hoje.
+ * GET /: dataInicio, dataFim (YYYY-MM-DD). Intervalo = início/fim do dia no fuso STATS_TZ (padrão America/Sao_Paulo), não meia-noite UTC. Default início 2026-01-01; fim omitido = fim do dia nesse fuso hoje.
  *
  * Campos de data para filtro (LISTA_SCHEMAS.rb):
  * - Bacen: dataEntrada (não usar createdAt)
  * - N2: dataEntradaN2
  * - Reclame Aqui: dataReclam
  * - Procon: dataProcon
- * - N1 Octadesk: dataEntradaN1 (reclamações_n1Stats)
+ * - N1 Octadesk (card): período só em createdAt (LISTA_SCHEMAS). Sem filtro produto/motivo da UI: reclamações_n1Stats já é só tickets N1 elegíveis ao ingest.
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
  * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0.
- * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas (octadeskIngestService v1.7+); legado outras coleções: detalhe_2026 ou motivoReduzido.
- * Filtro motivo em N1: motivoReduzido e libera_o_chave_pix (regex).
- * Filtro produto: campo produto em todas as coleções; ingest N1 grava produto = libera_o_chave_pix (sem tradução no stats).
- * emAberto (N1 e demais): !Finalizado.Resolvido; N1 Octadesk só "Resolvido" grava Resolvido true no ingest.
+ * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
+ * N1 resolvido / taxa resolução (card): currentStatusName “Resolvido” (normalizeTextOctadesk), não só Finalizado.Resolvido.
+ * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado “Casos Especiais - Ouvidoria”; Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
+ * Filtro produto ouvidoria (Bacen, N2, RA, Procon): campo produto.
+ * Parâmetro motivo (UI): ouvidoria (Bacen, N2, RA, Procon) usa criarFiltroMotivoItemOuvidoria. N1 ignora produto e motivo no find — o card reflete todos os documentos da collection no período.
+ * emAberto ouvidoria: !Finalizado.Resolvido.
  */
 
 const express = require('express');
+const { DateTime } = require('luxon');
 const router = express.Router();
+
+/** Calendário YYYY-MM-DD para filtros (padrão Brasil). Sobrescreva com STATS_TZ se necessário. */
+const STATS_DATE_ZONE = process.env.STATS_TZ || 'America/Sao_Paulo';
 const {
   N1_STATS_COLLECTION,
   motivoN1ContaComoLiberacaoParaMetricas,
+  normalizeTextOctadesk,
+  expandMotivoLiberacaoChavePixParaMongoIn,
 } = require('../services/octadeskIngestService');
 
 const MOTIVO_LIBERACAO_CHAVE_PIX = 'liberação chave pix';
@@ -80,10 +88,102 @@ function normalizarDetalheStats(s) {
 }
 
 const DETALHE_LIBERACAO_CHAVE_PIX_NORM = 'liberacao chave pix';
+/** Motivos da UI que identificam linha de produto Antecipação; em ouvidoria o valor costuma estar em produto, não em motivoReduzido. */
+const MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA = {
+  'Antecipação - 2026': ['Antecipação - 2026', 'Antecipação 2026', 'Antecipação'],
+  'Antecipação - Outros Anos': ['Antecipação - Outros Anos', 'Antecipacao'],
+};
+
+/** Rótulo do filtro “Motivo” = liberação chave Pix: no Octadesk também vem “Chave Pix” sem “Liberação”. */
+const MOTIVO_UI_LIBERACAO_CHAVE_PIX = 'Liberação chave pix';
+
+/**
+ * YYYY-MM-DD → início/fim de dia no fuso STATS_DATE_ZONE (Luxon). Mongo compara instantes em UTC corretamente.
+ */
+function parseDataDiaLocalInicio(yyyyMmDd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(yyyyMmDd ?? '').trim());
+  if (!m) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  const dt = DateTime.fromISO(iso, { zone: STATS_DATE_ZONE });
+  if (!dt.isValid) return null;
+  return dt.startOf('day').toJSDate();
+}
+
+function parseDataDiaLocalFim(yyyyMmDd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(yyyyMmDd ?? '').trim());
+  if (!m) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  const dt = DateTime.fromISO(iso, { zone: STATS_DATE_ZONE });
+  if (!dt.isValid) return null;
+  return dt.endOf('day').toJSDate();
+}
+
+function hojeFimDiaLocal() {
+  return DateTime.now().setZone(STATS_DATE_ZONE).endOf('day').toJSDate();
+}
+
+/** Rotas GET /api/stats: default início 2026-01-01; fim omitido = fim do dia no fuso STATS_DATE_ZONE. */
+function normalizarIntervaloDatasQueryStats(dataInicioRaw, dataFimRaw) {
+  const defaultInicio = '2026-01-01';
+  const inRaw = (dataInicioRaw && String(dataInicioRaw).trim()) || defaultInicio;
+  let dataInicio = parseDataDiaLocalInicio(inRaw);
+  if (!dataInicio) dataInicio = parseDataDiaLocalInicio(defaultInicio);
+
+  let dataFim;
+  if (dataFimRaw && String(dataFimRaw).trim()) {
+    dataFim = parseDataDiaLocalFim(String(dataFimRaw).trim());
+    if (!dataFim) dataFim = hojeFimDiaLocal();
+  } else {
+    dataFim = hojeFimDiaLocal();
+  }
+
+  if (dataInicio.getTime() > dataFim.getTime()) {
+    const di = DateTime.fromJSDate(dataInicio, { zone: STATS_DATE_ZONE });
+    const df = DateTime.fromJSDate(dataFim, { zone: STATS_DATE_ZONE });
+    dataInicio = df.startOf('day').toJSDate();
+    dataFim = di.endOf('day').toJSDate();
+  }
+
+  return { dataInicio, dataFim };
+}
+
+function dataInicioOpcionalQueryLocal(raw) {
+  if (raw == null || String(raw).trim() === '') return null;
+  return parseDataDiaLocalInicio(String(raw).trim());
+}
+
+function dataFimOpcionalQueryLocal(raw) {
+  if (raw == null || String(raw).trim() === '') return null;
+  return parseDataDiaLocalFim(String(raw).trim());
+}
+
+/** Documento da coleção reclamações_n1Stats (Octadesk). */
+function isDocN1Stats(r) {
+  if (r == null) return false;
+  const n = r.octadeskNumber;
+  return n != null && String(n).trim() !== '' && !Number.isNaN(Number(n));
+}
+
+function documentoEscaladoN2ContagemN1(r) {
+  const v = r?.escalar_chamado;
+  if (v == null || String(v).trim() === '') return false;
+  return normalizeTextOctadesk(String(v)) === normalizeTextOctadesk('Casos Especiais - Ouvidoria');
+}
+
+function documentoRetidoContagemN1(r) {
+  return r != null && r.retido_no_atendimento === true;
+}
+
+/** Em aberto N1: status Octadesk ≠ Resolvido (mesma normalização do webhook). Ausente ou vazio = aberto. */
+function documentoEmAbertoN1PorStatus(r) {
+  const name = r?.currentStatusName;
+  if (name == null || String(name).trim() === '') return true;
+  return normalizeTextOctadesk(String(name)) !== normalizeTextOctadesk('Resolvido');
+}
 
 /**
  * Universo "Ocorrências" / Liberação Chave Pix.
- * N1 (octadeskNumber): mesma regra que o ingest (motivoN1ContaComoLiberacaoParaMetricas).
+ * N1 (octadeskNumber): motivoN1ContaComoLiberacaoParaMetricas(r.motivoReduzido).
  * Outras coleções: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
  */
 function documentoELiberacaoChavePixExclusivo(r) {
@@ -92,10 +192,10 @@ function documentoELiberacaoChavePixExclusivo(r) {
     r.octadeskNumber != null &&
     String(r.octadeskNumber).trim() !== '' &&
     !Number.isNaN(Number(r.octadeskNumber));
-  const mcp = r.motivos_chave_pix;
   if (n1) {
-    return motivoN1ContaComoLiberacaoParaMetricas(mcp);
+    return motivoN1ContaComoLiberacaoParaMetricas(r.motivoReduzido);
   }
+  const mcp = r.motivos_chave_pix;
   if (mcp != null && String(mcp).trim() !== '') {
     return normalizarDetalheStats(mcp) === DETALHE_LIBERACAO_CHAVE_PIX_NORM;
   }
@@ -115,7 +215,7 @@ const CAMPOS_DATA_POR_COLLECTION = {
   reclamacoes_reclameAqui: 'dataReclam',
   reclamacoes_procon: 'dataProcon',
   reclamacoes_judicial: 'dataEntrada',
-  reclamacoes_n1Stats: 'dataEntradaN1',
+  reclamacoes_n1Stats: 'createdAt',
 };
 
 function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
@@ -131,6 +231,28 @@ function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
     return { [campoData]: { $exists: true, $ne: null, ...condicoesData } };
   }
   return { createdAt: condicoesData };
+}
+
+/**
+ * N1 card: período só em createdAt (OpenDate no ingest). Limites = normalizarIntervaloDatasQueryStats.
+ */
+function criarFiltroPeriodoN1PorCreatedAt(dataInicio, dataFim) {
+  if (!dataInicio && !dataFim) return {};
+  let di = dataInicio ? new Date(dataInicio) : null;
+  let df = dataFim ? new Date(dataFim) : null;
+  if (di && Number.isNaN(di.getTime())) di = null;
+  if (df && Number.isNaN(df.getTime())) df = null;
+  if (di && df && di.getTime() > df.getTime()) {
+    const t = di.getTime();
+    di = new Date(df);
+    df = new Date(t);
+  }
+  const condicoesDataInicio = di ? { $gte: di } : {};
+  const condicoesDataFim = df ? { $lte: df } : {};
+  const condicoesData = { ...condicoesDataInicio, ...condicoesDataFim };
+  return {
+    createdAt: { $exists: true, $ne: null, ...condicoesData },
+  };
 }
 
 function criarFiltroProduto(produtos) {
@@ -151,34 +273,42 @@ function mesclarFiltros(filtroData, filtroProduto, filtroMotivo = {}) {
 }
 
 /**
- * motivoReduzido: String (Bacen) ou [String] (RA, Procon, N2).
+ * motivoReduzido: String (Bacen, N1) ou [String] (RA, Procon, N2).
  * Usa $regex para funcionar em ambos os tipos.
  */
+function criarFiltroMotivoItemOuvidoria(m) {
+  const t = String(m).trim();
+  const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const produtosLinha = MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA[t];
+
+  if (normalizeTextOctadesk(t) === normalizeTextOctadesk(MOTIVO_UI_LIBERACAO_CHAVE_PIX)) {
+    const literaisMongo = expandMotivoLiberacaoChavePixParaMongoIn();
+    const porMotivo = {
+      $or: [
+        { motivoReduzido: { $in: literaisMongo } },
+        { motivoReduzido: { $regex: escaped, $options: 'i' } },
+        { motivoReduzido: /chave\s*pix/i },
+      ],
+    };
+    if (!produtosLinha) return porMotivo;
+    return { $or: [porMotivo, { produto: { $in: produtosLinha } }] };
+  }
+
+  const porMotivo = { motivoReduzido: { $regex: escaped, $options: 'i' } };
+  if (!produtosLinha) return porMotivo;
+  return {
+    $or: [
+      porMotivo,
+      { produto: { $in: produtosLinha } },
+    ],
+  };
+}
+
 function criarFiltroMotivo(motivos) {
   if (!motivos || !Array.isArray(motivos) || motivos.length === 0) return {};
   const valores = motivos.filter(m => m && String(m).trim()).map(m => String(m).trim());
   if (valores.length === 0) return {};
-  const condicoes = valores.map(m => {
-    const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return { motivoReduzido: { $regex: escaped, $options: 'i' } };
-  });
-  return condicoes.length === 1 ? condicoes[0] : { $or: condicoes };
-}
-
-/** N1 Octadesk: motivoReduzido espelha libera_o_chave_pix; inclui match direto no campo para legado/consultas. */
-function criarFiltroMotivoN1(motivos) {
-  if (!motivos || !Array.isArray(motivos) || motivos.length === 0) return {};
-  const valores = motivos.filter((m) => m && String(m).trim()).map((m) => String(m).trim());
-  if (valores.length === 0) return {};
-  const condicoes = valores.map((m) => {
-    const escaped = m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return {
-      $or: [
-        { motivoReduzido: { $regex: escaped, $options: 'i' } },
-        { libera_o_chave_pix: { $regex: escaped, $options: 'i' } },
-      ],
-    };
-  });
+  const condicoes = valores.map((m) => criarFiltroMotivoItemOuvidoria(m));
   return condicoes.length === 1 ? condicoes[0] : { $or: condicoes };
 }
 
@@ -260,16 +390,75 @@ function normalizarChaveProduto(produto) {
 }
 
 /**
- * Taxa de resolução e “resolvido”: somente com Finalizado.Resolvido === true (estrito).
- * Qualquer outro caso (ausente, false, null) = não resolvido para as métricas.
+ * Taxa de resolução e “resolvido”: N1 usa status Octadesk (currentStatusName); demais canais Finalizado.Resolvido === true.
  */
 function documentoResolvidoParaMetricas(r) {
-  return r != null && r.Finalizado != null && r.Finalizado.Resolvido === true;
+  if (r == null) return false;
+  if (isDocN1Stats(r)) {
+    const name = r.currentStatusName;
+    if (name == null || String(name).trim() === '') return false;
+    return normalizeTextOctadesk(String(name)) === normalizeTextOctadesk('Resolvido');
+  }
+  return r.Finalizado != null && r.Finalizado.Resolvido === true;
+}
+
+/** N1: só retido_no_atendimento === false. Ouvidoria: retido_no_atendimento ou legado pixLiberado. */
+function documentoLiberadoChavePixParaMetricas(r) {
+  if (r == null) return false;
+  if (isDocN1Stats(r)) {
+    return r.retido_no_atendimento === false;
+  }
+  if (typeof r.retido_no_atendimento === 'boolean') {
+    return r.retido_no_atendimento === false;
+  }
+  if (typeof r.pixLiberado === 'boolean') {
+    return r.pixLiberado === true;
+  }
+  return false;
+}
+
+/**
+ * Métricas do card N1 sobre o conjunto já filtrado (LISTA_SCHEMAS: escalar_chamado, retido_no_atendimento, currentStatusName).
+ * Mantém chaves do JSON esperadas pelo Dashboard (pixLiberado = Escalado N2, pixRetido = Retidos).
+ */
+function calcularStatsCardN1(docs) {
+  const ocorrencias = docs.length;
+  const emAberto = docs.filter((r) => documentoEmAbertoN1PorStatus(r)).length;
+  const resolvido = docs.filter((r) => documentoResolvidoParaMetricas(r)).length;
+  const caEProtocolos = docs.filter((r) => (
+    r.acionouCentral === true ||
+    (r.protocolosCentral && Array.isArray(r.protocolosCentral) && r.protocolosCentral.length > 0) ||
+    r.n2SegundoNivel === true ||
+    (r.protocolosN2 && Array.isArray(r.protocolosN2) && r.protocolosN2.length > 0) ||
+    r.reclameAqui === true ||
+    (r.protocolosReclameAqui && Array.isArray(r.protocolosReclameAqui) && r.protocolosReclameAqui.length > 0) ||
+    r.procon === true ||
+    (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
+  )).length;
+  const pixLiberado = docs.filter((r) => documentoEscaladoN2ContagemN1(r)).length;
+  const pixRetido = docs.filter((r) => documentoRetidoContagemN1(r)).length;
+  const solLiberacao = ocorrencias;
+  const percRetencao =
+    solLiberacao > 0 ? Math.round((pixRetido / solLiberacao) * 1000) / 10 : 0;
+  const taxaResolucao = ocorrencias > 0 ? Math.round((resolvido / ocorrencias) * 1000) / 10 : 0;
+  return {
+    ocorrencias,
+    emAberto,
+    resolvido,
+    caEProtocolos,
+    solLiberacao,
+    pixLiberado,
+    pixRetido,
+    percRetencao,
+    taxaResolucao,
+  };
 }
 
 function calcularStatsPorTipo(docs) {
   const ocorrencias = docs.length;
-  const emAberto = docs.filter((r) => !documentoResolvidoParaMetricas(r)).length;
+  const emAberto = docs.filter((r) => (
+    isDocN1Stats(r) ? documentoEmAbertoN1PorStatus(r) : !documentoResolvidoParaMetricas(r)
+  )).length;
   const resolvido = docs.filter((r) => documentoResolvidoParaMetricas(r)).length;
   const caEProtocolos = docs.filter(r => (
     r.acionouCentral === true ||
@@ -285,10 +474,15 @@ function calcularStatsPorTipo(docs) {
   const docsLiberacaoChavePix = docs.filter((r) => documentoELiberacaoChavePixExclusivo(r));
   const solLiberacao = docsLiberacaoChavePix.length;
 
-  const somaEscaladoN2 = docsLiberacaoChavePix.filter((r) => r.pixLiberado === true).length;
-  const somaRetidos = docsLiberacaoChavePix.filter(
-    (r) => documentoResolvidoParaMetricas(r) && r.pixLiberado === false
-  ).length;
+  /** N1: Escalado N2 e Retidos sobre todas as ocorrências; demais canais inalterados (só docs Liberação Chave Pix). */
+  const somaEscaladoN2 =
+    docs.filter((r) => isDocN1Stats(r) && documentoEscaladoN2ContagemN1(r)).length +
+    docsLiberacaoChavePix.filter((r) => !isDocN1Stats(r) && documentoLiberadoChavePixParaMetricas(r)).length;
+  const somaRetidos =
+    docs.filter((r) => isDocN1Stats(r) && documentoRetidoContagemN1(r)).length +
+    docsLiberacaoChavePix.filter(
+      (r) => !isDocN1Stats(r) && documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r)
+    ).length;
 
   const pixLiberado = somaEscaladoN2;
   const pixRetido = somaRetidos;
@@ -322,7 +516,7 @@ function enrichComMostradoresOuvidoria(baseStats, docs) {
 /**
  * GET /api/stats
  * Query params: dataInicio, dataFim, produto (array), motivo (array)
- * Defaults: dataInicio 2026-01-01, dataFim hoje. Se produto/motivo vazios, não aplica filtro.
+ * Defaults: dataInicio 2026-01-01, dataFim fim do dia em STATS_TZ. produto/motivo vazios: sem filtro nesse eixo nas ouvidorias. N1: só período em createdAt; ignora produto e motivo da query.
  */
 function initStatsRoutes(connectToMongo) {
   router.get('/', async (req, res) => {
@@ -340,12 +534,9 @@ function initStatsRoutes(connectToMongo) {
       }
       const db = client.db('hub_ouvidoria');
 
-      const dataInicioRaw = req.query.dataInicio || '2026-01-01';
+      const dataInicioRaw = (req.query.dataInicio && String(req.query.dataInicio).trim()) || '2026-01-01';
       const dataFimRaw = req.query.dataFim;
-      const dataInicio = new Date(dataInicioRaw);
-      dataInicio.setUTCHours(0, 0, 0, 0);
-      const dataFim = dataFimRaw ? new Date(dataFimRaw) : new Date();
-      dataFim.setUTCHours(23, 59, 59, 999);
+      const { dataInicio, dataFim } = normalizarIntervaloDatasQueryStats(req.query.dataInicio, req.query.dataFim);
 
       const produtosRaw = req.query.produto;
       const produtos = typeof produtosRaw === 'string'
@@ -364,22 +555,25 @@ function initStatsRoutes(connectToMongo) {
 
       const filtroProduto = criarFiltroProduto(produtos);
       const filtroMotivo = criarFiltroMotivo(motivos);
-      const filtroMotivoN1 = criarFiltroMotivoN1(motivos);
 
       const filtroDataBacen = criarFiltroDataPorCollection('reclamacoes_bacen', dataInicio, dataFim);
       const filtroDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
       const filtroDataRA = criarFiltroDataPorCollection('reclamacoes_reclameAqui', dataInicio, dataFim);
       const filtroDataProcon = criarFiltroDataPorCollection('reclamacoes_procon', dataInicio, dataFim);
-      const filtroDataN1 = criarFiltroDataPorCollection('reclamacoes_n1Stats', dataInicio, dataFim);
+      const filtroDataN1 = criarFiltroPeriodoN1PorCreatedAt(dataInicio, dataFim);
 
       const filtroBacen = mesclarFiltros(filtroDataBacen, filtroProduto, filtroMotivo);
       const filtroN2 = mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
-      const filtroN1 = mesclarFiltros(filtroDataN1, filtroProduto, filtroMotivoN1);
+      const filtroN1 = { ...filtroDataN1 };
 
       console.log('[STATS_FILTROS]', {
-        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'dataEntradaN1' },
+        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'createdAt' },
+        campoMotivoFiltro: 'motivoReduzido',
+        n1SemFiltroMotivoProduto: true,
+        statsRoute: 'v1.19.1',
+        statsTz: STATS_DATE_ZONE,
         dataInicio: dataInicioRaw,
         dataFim: dataFimRaw || '(hoje)',
         filtroBacen: JSON.stringify(filtroBacen),
@@ -397,10 +591,12 @@ function initStatsRoutes(connectToMongo) {
         db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
       ]);
 
+      console.log('[GET /api/stats] stats v1.19.1 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
+
       const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
 
       const porTipo = {
-        N1: calcularStatsPorTipo(n1Docs),
+        N1: calcularStatsCardN1(n1Docs),
         N2: enrichComMostradoresOuvidoria(calcularStatsPorTipo(n2Pix), n2Pix),
         'Reclame Aqui': enrichComMostradoresOuvidoria(calcularStatsPorTipo(reclameAquiDocs), reclameAquiDocs),
         Bacen: enrichComMostradoresOuvidoria(calcularStatsPorTipo(bacen), bacen),
@@ -409,12 +605,16 @@ function initStatsRoutes(connectToMongo) {
       };
 
       const pixLiberadoPorTipo = {
-        bacen: bacen.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
-        n2: n2Pix.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
-        ra: reclameAquiDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
-        procon: proconDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
-        n1: n1Docs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
-        total: todas.filter((r) => documentoELiberacaoChavePixExclusivo(r) && r.pixLiberado === true).length,
+        bacen: bacen.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
+        n2: n2Pix.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
+        ra: reclameAquiDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
+        procon: proconDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
+        n1: n1Docs.filter((r) => documentoEscaladoN2ContagemN1(r)).length,
+        total: todas.filter((r) => (
+          isDocN1Stats(r)
+            ? documentoEscaladoN2ContagemN1(r)
+            : documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)
+        )).length,
       };
       console.log('[STATS_RESULT]', JSON.stringify({
         filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },
@@ -598,10 +798,8 @@ function initStatsRoutes(connectToMongo) {
       }
       const db = client.db('hub_ouvidoria');
 
-      const dataInicio = req.query.dataInicio ? new Date(req.query.dataInicio) : null;
-      const dataFim = req.query.dataFim ? new Date(req.query.dataFim) : null;
-      if (dataInicio) dataInicio.setUTCHours(0, 0, 0, 0);
-      if (dataFim) dataFim.setUTCHours(23, 59, 59, 999);
+      const dataInicio = dataInicioOpcionalQueryLocal(req.query.dataInicio);
+      const dataFim = dataFimOpcionalQueryLocal(req.query.dataFim);
 
       const produtosRaw = req.query.produto;
       const produtos = Array.isArray(produtosRaw)
@@ -725,10 +923,8 @@ function initStatsRoutes(connectToMongo) {
           });
         }
         const db = client.db('hub_ouvidoria');
-        const dataInicio = req.query.dataInicio ? new Date(req.query.dataInicio) : null;
-        const dataFim = req.query.dataFim ? new Date(req.query.dataFim) : null;
-        if (dataInicio) dataInicio.setUTCHours(0, 0, 0, 0);
-        if (dataFim) dataFim.setUTCHours(23, 59, 59, 999);
+        const dataInicio = dataInicioOpcionalQueryLocal(req.query.dataInicio);
+        const dataFim = dataFimOpcionalQueryLocal(req.query.dataFim);
         const produtosRaw = req.query.produto;
         const produtos = Array.isArray(produtosRaw)
           ? produtosRaw.filter((p) => p && String(p).trim()).map((p) => String(p).trim())
@@ -778,10 +974,7 @@ function initStatsRoutes(connectToMongo) {
       }
       const db = client.db('hub_ouvidoria');
 
-      const dataInicio = new Date('2026-01-01');
-      dataInicio.setUTCHours(0, 0, 0, 0);
-      const dataFim = new Date();
-      dataFim.setUTCHours(23, 59, 59, 999);
+      const { dataInicio, dataFim } = normalizarIntervaloDatasQueryStats('2026-01-01', null);
 
       const filtroSóDataBacen = criarFiltroDataPorCollection('reclamacoes_bacen', dataInicio, dataFim);
       const filtroSóDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
@@ -817,3 +1010,5 @@ function initStatsRoutes(connectToMongo) {
 }
 
 module.exports = initStatsRoutes;
+/** Diagnóstico / scripts: mesmo predicado de período N1 do GET /. */
+module.exports.criarFiltroPeriodoN1PorCreatedAt = criarFiltroPeriodoN1PorCreatedAt;

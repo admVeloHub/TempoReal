@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.3.5
+ * VERSION: v1.4.4
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Sessão em localStorage até logout ou expiração (4h).
@@ -15,7 +15,14 @@ import AbaAuxiliar from './components/AbaAuxiliar';
 import LoginPage from './components/LoginPage';
 import ObservadorOctadesk from './components/ObservadorOctadesk';
 import HookWebhookOctadesk from './components/HookWebhookOctadesk';
-import { PRODUTOS, MOTIVOS, MultiSelectDropdown } from './components/FiltrosAuxiliar';
+import {
+  PRODUTOS,
+  MOTIVOS,
+  MultiSelectDropdown,
+  expandProdutosFiltroParaApi,
+  PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026,
+  PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS,
+} from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
 
@@ -31,10 +38,13 @@ function isHookPath() {
   return pathNormalized() === '/hook';
 }
 
-/** Produto: N1 grava "Antecipação - 2026"; Bacen/N2/RA/Procon legado costuma usar "Antecipação 2026". Ambos no default evita painel vazio. */
+/** Filtros ao abrir: grupos Antecipação, motivo Liberação chave pix, período 01/01/2026. GET /api/stats: Produto/Motivo afetam só ouvidoria; card N1 = todos os docs N1 no período (só createdAt). */
 const DEFAULT_FILTROS = {
-  produtos: ['Antecipação - 2026', 'Antecipação 2026'],
-  motivos: [],
+  produtos: [
+    PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026,
+    PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS,
+  ],
+  motivos: ['Liberação chave pix'],
   dataInicio: '2026-01-01',
   dataFim: '',
 };
@@ -197,10 +207,11 @@ function App() {
 
   const loadStats = useCallback(async (overrideFiltros) => {
     const f = overrideFiltros ?? filtrosHome;
+    const produtosApi = expandProdutosFiltroParaApi(f.produtos || []);
     const params = {
       dataInicio: f.dataInicio || undefined,
       dataFim: f.dataFim || undefined,
-      produtos: f.produtos?.length ? f.produtos : undefined,
+      produtos: produtosApi.length ? produtosApi : undefined,
       motivos: f.motivos?.length ? f.motivos : undefined,
     };
     const isFirstLoad = statsRef.current === null;

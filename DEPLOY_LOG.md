@@ -1,5 +1,49 @@
 # Deploy Log - Painel Tempo Real
 
+## GitHub Push
+
+**Data/Hora:** 2026-04-08  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.19.1 / `octadeskIngestService` v1.13.0 / LISTA_SCHEMAS v4.16.19 / `src/config.js` v1.2.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `LISTA_SCHEMAS.rb` — N1: `produto` documentado como fixo `Antecipação - 2026`; bloco `reclamacoes_n1Stats` v4.16.19
+- `backend/services/octadeskIngestService.js` v1.13.0 — upsert N1: `produto` sempre `Antecipação - 2026`; `motivoReduzido` canónico; `$unset` legados
+- `backend/routes/stats.js` v1.19.1 — card N1: `find` só período em `createdAt`; sem filtro produto/motivo da UI; log `stats v1.19.1`; export `criarFiltroPeriodoN1PorCreatedAt` para diagnose
+- `backend/routes/octadeskIntegration.js`, `backend/server.js` — ajustes de integração/servidor na mesma linha de trabalho
+- `backend/scripts/backupReclamacoesN1StatsJson.js`, `diagnoseN1StatsFilter.js` v1.3.1, `normalizeN1ProdutoAntecipacao2026.js` v1.0.0
+- `src/config.js` v1.2.0 — dev: API padrão `http://localhost:5050`; Cloud Run só com `REACT_APP_USE_PRODUCTION_API=1`
+- `src/App.js`, `FiltrosAuxiliar.js`, `api.js`, `DashboardReclamacoes.js`, `AbaAuxiliar.js`, `AbaRA.js`, `HookWebhookOctadesk.js` — comentários/versões alinhados ao stats e à API
+- `.env.example` v1.0.3 — documentação variáveis front; `.gitignore`
+- Removidos: `PROMPT_AGREGACAO_MOTIVOS_BACEN.md`, `exemplo/body.json`
+
+### Descrição
+Painel N1 passa a contar todos os documentos de `reclamações_n1Stats` no intervalo de `createdAt`, sem aplicar os filtros de produto/motivo das ouvidorias. Ingest grava produto fixo. Em desenvolvimento, o React deixa de usar `REACT_APP_API_URL` (Cloud Run) por defeito, evitando `/api/stats` antigo ao testar com `npm start` + backend local.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-04-06 (registro da alteração no repositório)  
+**Tipo:** Push GitHub  
+**Versão:** backend `octadeskIngestService` v1.9.7 / `stats` v1.12.4 / `server` v1.4.10 / script `migrateN1StatsLegacyFields` v1.0.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` (v1.12.4) — métricas Liberação Chave Pix com `documentoLiberadoChavePixParaMetricas` (`retido_no_atendimento` + fallback `pixLiberado`); filtro motivo N1 com `motivos_chave_pix`
+- `backend/services/octadeskIngestService.js` (v1.9.7) — `$set` sem `motivoReduzido`/`pixLiberado`; `$unset` desses campos a cada upsert N1
+- `backend/server.js` (v1.4.10)
+- `backend/scripts/migrateN1StatsLegacyFields.js` (v1.0.0) — migração `reclamações_n1Stats` (`DRY_RUN=1` ou `MIGRATE_N1_STATS=1`)
+- `LISTA_SCHEMAS.rb` — bloco N1 sem `motivoReduzido`; notas legado `pixLiberado` / `motivo_2026`
+
+### Descrição
+N1: modelo de persistência alinhado a `retido_no_atendimento` e remoção de `motivoReduzido`/`pixLiberado` no webhook; stats e script operacional para normalizar documentos legados no Mongo (executar script apenas com backup e após validar `DRY_RUN=1`).
+
+---
+
 ## GCP Cloud Run
 
 **Data/Hora:** 2026-04-06 15:06  

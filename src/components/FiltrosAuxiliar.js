@@ -1,17 +1,41 @@
 /**
  * Painel Reclamações Tempo Real - FiltrosAuxiliar
- * VERSION: v1.2.0
+ * VERSION: v1.2.8
  *
  * Seção de filtros compartilhada: início, fim, produto, motivo, Atualizar.
+ * Produto Antecipação 2026 / Outros anos: um rótulo cada; na API expande atual + legado juntos.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 
+/** Valores armazenados na seleção do multiselect (não são strings de produto do Mongo). */
+export const PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026 = 'grp:antecipacao-2026';
+export const PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS = 'grp:antecipacao-outros-anos';
+
+/** N1 no GET /api/stats: só período em createdAt; Produto e Motivo da UI filtram apenas Bacen/RA/N2/Procon. */
+const PRODUTO_GRUPOS_PARA_API = {
+  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026]: ['Antecipação - 2026', 'Antecipação 2026', 'Antecipação'],
+  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS]: ['Antecipação - Outros Anos', 'Antecipacao'],
+};
+
+/**
+ * Converte seleção do filtro (com chaves de grupo) nos valores enviados ao backend ($in produto nas ouvidorias).
+ */
+export function expandProdutosFiltroParaApi(selecionados) {
+  if (!selecionados || !Array.isArray(selecionados) || selecionados.length === 0) return [];
+  const out = [];
+  for (const v of selecionados) {
+    const k = String(v);
+    const exp = PRODUTO_GRUPOS_PARA_API[k];
+    if (exp) out.push(...exp);
+    else out.push(k);
+  }
+  return [...new Set(out)];
+}
+
 const PRODUTOS = [
-  { label: 'Antecipação - 2026', value: 'Antecipação - 2026' },
-  { label: 'Antecipação - Outros Anos', value: 'Antecipação - Outros Anos' },
-  { label: 'Antecipação 2026 (legado)', value: 'Antecipação 2026' },
-  { label: 'Antecipação Outros Anos (legado)', value: 'Antecipacao' },
+  { label: 'Antecipação - 2026', value: PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026 },
+  { label: 'Antecipação - Outros Anos', value: PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS },
   { label: 'Aplicativo', value: 'Aplicativo' },
   { label: 'Conta Celcoin', value: 'Conta Celcoin' },
   { label: 'Cupom', value: 'Cupom' },

@@ -1,5 +1,5 @@
 listagem de schema de coleções do mongoDB
-  <!-- VERSION: v4.16.7 | DATE: 2026-04-06 | AUTHOR: VeloHub Development Team -->
+  <!-- VERSION: v4.16.19 | DATE: 2026-04-07 | AUTHOR: VeloHub Development Team -->
  
     🗄️ Database: console_conteudo
    
@@ -807,24 +807,18 @@ listagem de schema de coleções do mongoDB
   // - email: 1 (índice esparso para buscas por email)
   // - createdAt: -1 (índice para ordenação)
   
-  //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1)
+  //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1) — LISTA v4.16.19: motivoReduzido String; produto fixo Antecipação - 2026; sem motivos_chave_pix/libera_o_chave_pix/pixLiberado no documento
   {
   _id: ObjectId,
   octadeskNumber: Number,           // Ticket Octadesk (único); no POST do webhook vem como Number (JSON raiz)
   cpf: String,                     // Origem CustomField cpf_do_titular no webhook
-  motivos_chave_pix: String,      // Webhook N1 (octadeskIngest v1.9+): grava só se critério estrito (aliases MOTIVO_LIBERACAO_FRASES_NORM; sem tópico/heurística ampla). Métricas N1 também usam motivoN1ContaComoLiberacaoParaMetricas
-  libera_o_chave_pix: String,     // Único critério de produto; mesmo valor em produto; webhook sempre grava (vazio permitido)
+  motivoReduzido: String,          // Texto canónico alinhado à elegibilidade chave pix (ingest grava; payload Octadesk pode ler CF motivos_chave_pix — não persistir esse nome)
   escalar_chamado: String,        // CustomField escalar_chamado quando a chave vem no POST (String ou null; não entra no critério skipped/upsert)
-  motivo_2026: String,            // Legado: ingest N1 v1.7.6+ não preenche (string vazia); métricas N1 usam motivos_chave_pix
-  detalhe_2026: String,           // Legado: idem; não é critério N1
-  motivoReduzido: [String],       // Tipicamente [libera_o_chave_pix]; stats / filtro motivo
-  currentStatusName: String,      // Octadesk: só "Resolvido" → Finalizado.Resolvido; Novo, Pendente, Em Andamento → em aberto
-  retido_no_atendimento: Boolean, // Único critério retido vs liberado (espelho CustomField); upsert atualiza se mudar
-  pixLiberado: Boolean,           // !retido_no_atendimento (somente esse campo)
-  produto: String,                // Somente libera_o_chave_pix (sem tópico/outros campos)
-  dataEntradaN1: Date,
+  currentStatusName: String,      // Octadesk: métricas resolução N1 por status "Resolvido" (normalizeTextOctadesk); Finalizado espelha resolução no ingest
+  retido_no_atendimento: Boolean, // Único critério retido vs liberado (espelho CustomField); stats N1 usam este campo
+  produto: String,                // Linha N1: valor fixo persistido "Antecipação - 2026" (ingest + script normalizeN1ProdutoAntecipacao2026); CF libera_o_chave_pix não alimenta este campo
   Finalizado: { Resolvido: Boolean, dataResolucao: Date },
-  createdAt: Date,
+  createdAt: Date,                // OpenDate Octadesk. GET /api/stats N1: período só createdAt
   updatedAt: Date
   }
   

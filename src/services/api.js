@@ -1,9 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.3.2
+ * VERSION: v1.4.8
  *
- * Filtro de data: backend usa por coleção (LISTA_SCHEMAS.rb)
- * Bacen: dataEntrada | N2: dataEntradaN2 | Reclame Aqui: dataReclam | Procon: dataProcon | N1: dataEntradaN1
+ * Filtro de data: query YYYY-MM-DD; backend interpreta início/fim do dia em STATS_TZ (padrão America/Sao_Paulo), não UTC.
+ * Campos por coleção (LISTA_SCHEMAS.rb): Bacen dataEntrada | N2 dataEntradaN2 | RA dataReclam | Procon dataProcon | N1 createdAt
+ * produto/motivo: query params para Bacen/RA/N2/Procon. N1: backend ignora produto e motivo; só intervalo em createdAt.
  */
 
 import { API_BASE_URL } from '../config';
@@ -26,7 +27,7 @@ export async function fetchStats(params = {}) {
   console.log('[STATS_REQUEST]', {
     params,
     url,
-    camposDataBackend: { Bacen: 'dataEntrada', N2: 'dataEntradaN2', ReclameAqui: 'dataReclam', Procon: 'dataProcon', N1: 'dataEntradaN1' },
+    camposDataBackend: { Bacen: 'dataEntrada', N2: 'dataEntradaN2', ReclameAqui: 'dataReclam', Procon: 'dataProcon', N1: 'createdAt', motivoTodos: 'motivoReduzido' },
   });
   const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) {

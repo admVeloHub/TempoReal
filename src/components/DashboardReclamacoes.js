@@ -1,9 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.5.0
+ * VERSION: v2.5.7
  *
  * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
- * N1: Ocorrências, Escalado N2, Retidos, Em Aberto (status ≠ Resolvido no Octadesk).
+ * N1: Ocorrências = todos os docs da collection N1 no período (API ignora produto/motivo da UI). % Retenção = pixRetido/ocorrencias. Escalado N2 / Retidos / Em Aberto como stats.
  * Bacen, RA, Procon e N2: Sem Resposta, Op. Cancelada, Em Aberto.
  * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
  * % Retenção em cada card (incl. N1): retidos ÷ ocorrências (solLiberacao) só com dados daquele canal. Painel adm: agregado sem N1. Paleta LAYOUT_GUIDELINES.
@@ -34,7 +34,7 @@ const CANAIS = [
   { key: 'N2', label: 'N2', iconSrc: `${BASE_ICONS}/icon n2.png`, cor: CORES.blueMedium },
 ];
 
-/** % Retenção: retidos ÷ ocorrências (solLiberacao), 1 decimal. */
+/** % Retenção: retidos ÷ base (solLiberacao ou ocorrencias conforme o card), 1 decimal. */
 function percRetencaoSobreOcorrencias(retidos, ocorrenciasSolLiberacao) {
   const o = Number(ocorrenciasSolLiberacao) || 0;
   const r = Number(retidos) || 0;
@@ -212,7 +212,8 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
       <section className="shrink-0 grid grid-cols-5 gap-3 min-w-0 overflow-x-auto mt-4">
         {CANAIS.map((canal, idx) => {
           const dados = getDados(canal.key);
-          const percRetCard = percRetencaoSobreOcorrencias(dados.pixRetido, dados.solLiberacao);
+          const baseRetencao = canal.key === 'N1' ? dados.ocorrencias : dados.solLiberacao;
+          const percRetCard = percRetencaoSobreOcorrencias(dados.pixRetido, baseRetencao);
           const bgRgba = hexToRgba(canal.cor);
           return (
             <div
@@ -233,7 +234,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Ocorrências</span>
-                    <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.solLiberacao ?? 0}</span>
+                    <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.ocorrencias ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">{canal.key === 'N1' ? 'Escalado N2' : 'Liberados'}</span>

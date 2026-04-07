@@ -1,9 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - HookWebhookOctadesk
- * VERSION: v1.4.6
- *
- * /hook lista octadesk_ingest_log: cada linha = resultado do backend que recebeu o POST (veja coluna Instância).
- * POST: /api/integrations/octadesk/webhook; segredo opcional (OCTADESK_WEBHOOK_SECRET).
+ * VERSION: v1.4.7
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -181,20 +178,6 @@ function HookWebhookOctadesk({ userName, userPicture }) {
       </header>
 
       <main className="flex-1 p-4 overflow-auto" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-3 space-y-2">
-          <p>
-            Rota oculta <code className="text-[11px]">/hook</code>. Cada linha é um registro em{' '}
-            <code className="text-[11px]">octadesk_ingest_log</code> no Mongo — ou seja, o efeito do processamento HTTP do{' '}
-            <strong>servidor que recebeu</strong> o webhook (coluna <em>Instância</em>), não “do React na porta 5000” por si só.
-            Se o Octadesk estiver configurado com URL do Cloud Run, quem grava o log e o N1 é o Cloud Run; o navegador local só lê o mesmo banco.
-            Para testar <strong>este</strong> projeto de ponta a ponta, o POST precisa bater no backend que você subiu (ex.: túnel apontando para a sua máquina ou URL local).
-          </p>
-          <p className="text-gray-500 dark:text-gray-500">
-            Octadesk → <code className="text-[11px]">POST /api/integrations/octadesk/webhook</code> (JSON do ticket). Segredo opcional:{' '}
-            <code className="text-[11px]">OCTADESK_WEBHOOK_SECRET</code> via header ou <code className="text-[11px]">?octadesk_webhook_key=</code>.
-          </p>
-        </div>
-
         {apiOk && (
           <div className="mb-3 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <span>

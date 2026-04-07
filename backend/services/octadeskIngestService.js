@@ -1,10 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - Octadesk ingest (helpers + webhook N1 + logs / índices)
- * VERSION: v1.9.6
+ * VERSION: v1.13.0
  *
- * POST /api/integrations/octadesk/webhook: persiste em reclamações_n1Stats quando motivos_chave_pix
- * atende critério estrito (alias MOTIVO_LIBERACAO_FRASES_NORM + variantes compactas; sem heurística ampla de isN1IngestEligible).
- * Logs em octadesk_ingest_log; stats agregam com motivoN1ContaComoLiberacaoParaMetricas (inalterado).
+ * POST /api/integrations/octadesk/webhook: persiste em reclamações_n1Stats quando CF/tópico atende critério chave pix.
+ * Documento: motivoReduzido (String canónica "Liberação chave pix"); produto fixo "Antecipação - 2026" na linha N1 (CF libera_o_chave_pix não grava produto; sem persistir libera_o_chave_pix / motivos_chave_pix / pixLiberado no Mongo).
+ * Logs em octadesk_ingest_log; stats usam motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido).
  * Autenticação do webhook (opcional): OCTADESK_WEBHOOK_SECRET vazio = POST aberto (arriscado). Com segredo: mesmo valor em header (x-api-key / x-octadesk-webhook-secret)
  * ou na query string (?octadesk_webhook_key=...) — muitos SaaS não permitem headers customizados, mas permitem URL completa com parâmetros.
  * Coleções: hub_ouvidoria.reclamações_n1Stats, hub_ouvidoria.octadesk_ingest_log (LISTA_SCHEMAS.rb).
@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const os = require('os');
 
-const INGEST_SERVICE_VERSION = 'v1.9.6';
+const INGEST_SERVICE_VERSION = 'v1.13.0';
 
 /**
  * Identifica o processo que executou processOctadeskN1Webhook (gravado no octadesk_ingest_log).
@@ -35,6 +35,12 @@ const DEEP_SCAN_MAX_DEPTH = 16;
 
 const N1_STATS_COLLECTION = 'reclamações_n1Stats';
 const INGEST_LOG_COLLECTION = 'octadesk_ingest_log';
+
+/** Valor canónico persistido em motivoReduzido (N1); CF Octadesk pode chamar-se motivos_chave_pix. */
+const MOTIVOS_CHAVE_PIX_VALOR_CANONICO = 'Liberação chave pix';
+
+/** Linha N1 no Mongo: produto único alinhado ao multiselect da UI (FiltrosAuxiliar). */
+const N1_PRODUTO_PERSISTIDO = 'Antecipação - 2026';
 
 /** Retenção do log de ingestão (TTL em receivedAt). */
 const INGEST_LOG_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -223,8 +229,8 @@ function webhookBodyRoots(body) {
 /**
  * CustomField da Octadesk: objeto, string JSON (parse), array de { key, value }, wrappers (Ticket/Data).
  * Ordem: blocos secundários primeiro; CustomField por último (fonte principal).
- * mergeCustomFieldLayer não aplica undefined; null não apaga valor já preenchido (evita MultiChannelField apagar motivos_chave_pix).
- * typeof [] === 'object' em JS — array sem normalizar não expõe cf.motivos_chave_pix.
+ * mergeCustomFieldLayer não aplica undefined; null não apaga valor já preenchido (evita MultiChannelField apagar CF de motivo chave pix).
+ * typeof [] === 'object' em JS — array sem normalizar não expõe chaves CF homólogas.
  */
 const CUSTOM_FIELD_EXTRACTORS = [
   (b) => b?.RequesterCustomField,
@@ -376,19 +382,49 @@ function scalarCustomFieldValue(v) {
   return stripInvisible(String(v)).trim();
 }
 
-/** Frases equivalentes após mudanças de rótulo no formulário Octadesk (todas normalizadas igual ao valor recebido). */
+/** Frases equivalentes no formulário Octadesk (fonte única para norm + filtro Mongo stats N1). */
+const MOTIVO_LIBERACAO_CHAVE_PIX_LITERALES = [
+  'Liberação chave pix',
+  'Liberação de chave pix',
+  'Liberação da chave pix',
+  'Liberacao chave pix',
+  'Liberacao de chave pix',
+  'Liberação Chave PIX',
+  'Chave Pix',
+  'chave pix',
+  'Solicitação liberação chave pix',
+  'Solicitacao liberacao chave pix',
+];
+
+/** Frases equivalentes após normalização (comparação com valor recebido). */
 const MOTIVO_LIBERACAO_FRASES_NORM = new Set(
-  [
-    'Liberação chave pix',
-    'Liberação de chave pix',
-    'Liberação da chave pix',
-    'Liberacao chave pix',
-    'Liberacao de chave pix',
-    'Liberação Chave PIX',
-    'Solicitação liberação chave pix',
-    'Solicitacao liberacao chave pix',
-  ].map((s) => normalizeTextOctadesk(s))
+  MOTIVO_LIBERACAO_CHAVE_PIX_LITERALES.map((s) => normalizeTextOctadesk(s))
 );
+
+/**
+ * Valores para $in em motivoReduzido (stats GET /, N1 e ouvidoria): variantes NFC/NFD e legado sem acento.
+ * Evita 0 resultados quando o filtro UI “Liberação chave pix” encontra grafia/Unicode diferente ou campo vazio no Mongo (ouvidoria; N1 filtra só motivo+data).
+ */
+function expandMotivoLiberacaoChavePixParaMongoIn() {
+  const out = new Set();
+  for (const x of MOTIVO_LIBERACAO_CHAVE_PIX_LITERALES) {
+    out.add(x);
+    try {
+      out.add(x.normalize('NFD'));
+      out.add(x.normalize('NFC'));
+    } catch (_e) {
+      /* ignore */
+    }
+  }
+  out.add(MOTIVOS_CHAVE_PIX_VALOR_CANONICO);
+  try {
+    out.add(MOTIVOS_CHAVE_PIX_VALOR_CANONICO.normalize('NFD'));
+    out.add(MOTIVOS_CHAVE_PIX_VALOR_CANONICO.normalize('NFC'));
+  } catch (_e) {
+    /* ignore */
+  }
+  return [...out];
+}
 
 /**
  * Valor textual do motivo (campo oficial ou custom homólogo) para regras N1.
@@ -434,6 +470,7 @@ function isMotivoLiberacaoChavePixNorm(norm) {
   if (!norm || typeof norm !== 'string') return false;
   if (MOTIVO_LIBERACAO_FRASES_NORM.has(norm)) return true;
   const compact = compactAlphaNorm(norm);
+  if (compact === 'chavepix') return true;
   if (compact === 'liberacaochavepix' || compact === 'liberacaodechavepix' || compact === 'liberacaodachavepix') {
     return true;
   }
@@ -538,10 +575,11 @@ function isEligibleCustomFields(customField, body) {
   return isN1IngestEligible(body, customField);
 }
 
-/** Mesma regra de "Liberação chave Pix" que o ingest usa — para stats (N1). */
-function motivoN1ContaComoLiberacaoParaMetricas(mcp) {
-  if (mcp == null || String(mcp).trim() === '') return false;
-  return isMotivoLiberacaoChavePixNorm(normalizeTextOctadesk(String(mcp)));
+/** Mesma regra de "Liberação chave Pix" que o ingest usa — para stats (N1 campo motivoReduzido). */
+function motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido) {
+  if (motivoReduzido == null || String(motivoReduzido).trim() === '') return false;
+  if (String(motivoReduzido).trim() === MOTIVOS_CHAVE_PIX_VALOR_CANONICO) return true;
+  return isMotivoLiberacaoChavePixNorm(normalizeTextOctadesk(String(motivoReduzido)));
 }
 
 /**
@@ -611,6 +649,7 @@ function coerceRetidoNoAtendimento(v) {
   return false;
 }
 
+/** Data de abertura do ticket (OpenDate); usada só no $setOnInsert.createdAt — campo dataEntradaN1 não é mais persistido (LISTA_SCHEMAS v4.16.15+). */
 function parseDataEntradaN1FromBody(body) {
   if (!body || typeof body !== 'object') return null;
   const raw = body.OpenDate ?? body.openDate;
@@ -627,9 +666,6 @@ function statusResolvidoFromBody(body) {
 }
 
 function buildN1WebhookUpsert(coerced, cf, octadeskNumber, now) {
-  const motivosChavePix = scalarMotivoChavePixFromCf(cf) || '';
-  const liberaRaw = getCustomFieldValue(cf, 'libera_o_chave_pix');
-  const liberaStr = liberaRaw == null ? '' : scalarCustomFieldValue(liberaRaw);
   const retido = coerceRetidoNoAtendimento(getCustomFieldValue(cf, 'retido_no_atendimento'));
   const cpfRaw = getCustomFieldValue(cf, 'cpf_do_titular');
   const cpfStr = cpfRaw == null ? '' : scalarCustomFieldValue(cpfRaw);
@@ -639,16 +675,12 @@ function buildN1WebhookUpsert(coerced, cf, octadeskNumber, now) {
       ? String(coerced.CurrentStatusName).trim()
       : '';
   const resolvido = statusResolvidoFromBody(coerced);
-  const motivoReduzido = liberaStr ? [liberaStr] : [];
 
   const $set = {
     cpf: cpfStr,
-    motivos_chave_pix: motivosChavePix,
-    libera_o_chave_pix: liberaStr,
+    motivoReduzido: MOTIVOS_CHAVE_PIX_VALOR_CANONICO,
+    produto: N1_PRODUTO_PERSISTIDO,
     retido_no_atendimento: retido,
-    pixLiberado: !retido,
-    produto: liberaStr,
-    motivoReduzido,
     currentStatusName: currentStatus,
     Finalizado: resolvido
       ? { Resolvido: true, dataResolucao: now }
@@ -661,15 +693,21 @@ function buildN1WebhookUpsert(coerced, cf, octadeskNumber, now) {
     $set.escalar_chamado = r === null ? null : scalarCustomFieldValue(r);
   }
 
-  const dataEntrada = parseDataEntradaN1FromBody(coerced) || now;
+  const createdAtInsert = parseDataEntradaN1FromBody(coerced) || now;
 
   const $setOnInsert = {
     octadeskNumber,
-    dataEntradaN1: dataEntrada,
-    createdAt: now,
+    createdAt: createdAtInsert,
   };
 
-  return { $set, $setOnInsert };
+  const $unset = {
+    motivos_chave_pix: '',
+    libera_o_chave_pix: '',
+    pixLiberado: '',
+    detalhe_2026: '',
+  };
+
+  return { $set, $setOnInsert, $unset };
 }
 
 function clonePayloadForLog(body) {
@@ -784,7 +822,7 @@ async function processOctadeskN1Webhook(client, bodyRaw) {
   if (!decision.eligible) {
     await writeLog({
       outcome: 'skipped',
-      message: 'Critério motivos_chave_pix (webhook N1) não atendido',
+      message: 'Critério chave pix (webhook N1) não atendido',
       detail: JSON.stringify(decision.skipDetail),
       octadeskNumber,
       payload: payloadForLog,
@@ -796,15 +834,11 @@ async function processOctadeskN1Webhook(client, bodyRaw) {
     };
   }
 
-  if (decision.motivoStr && scalarMotivoChavePixFromCf(cf) !== decision.motivoStr) {
-    cf = { ...cf, motivos_chave_pix: decision.motivoStr };
-  }
-
   const now = new Date();
-  const { $set, $setOnInsert } = buildN1WebhookUpsert(coerced, cf, octadeskNumber, now);
+  const { $set, $setOnInsert, $unset } = buildN1WebhookUpsert(coerced, cf, octadeskNumber, now);
 
   try {
-    await n1Coll.updateOne({ octadeskNumber }, { $set, $setOnInsert }, { upsert: true });
+    await n1Coll.updateOne({ octadeskNumber }, { $set, $setOnInsert, $unset }, { upsert: true });
     await writeLog({
       outcome: 'upsert',
       message: 'reclamações_n1Stats atualizado',
@@ -914,11 +948,13 @@ async function listIngestLogsWithMeta(connectToMongo, limit = 100, options = {})
 
 module.exports = {
   INGEST_SERVICE_VERSION,
+  MOTIVOS_CHAVE_PIX_VALOR_CANONICO,
   N1_STATS_COLLECTION,
   INGEST_LOG_COLLECTION,
   INGEST_LOG_TTL_SECONDS,
   INGEST_LOG_RECEIVED_AT_INDEX_NAME,
   normalizeText,
+  normalizeTextOctadesk,
   normalizeOctadeskCustomField,
   coerceOctadeskWebhookBody,
   isEligibleCustomFields,
@@ -926,6 +962,7 @@ module.exports = {
   isWebhookEligibleForN1Persist,
   evaluateWebhookN1PersistDecision,
   motivoN1ContaComoLiberacaoParaMetricas,
+  expandMotivoLiberacaoChavePixParaMongoIn,
   validateOctadeskWebhookSecret,
   isOctadeskWebhookSecretConfigured,
   processOctadeskN1Webhook,

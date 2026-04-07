@@ -1,8 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - Rotas Octadesk (webhook N1 + logs + supervisão)
- * VERSION: v1.6.3
+ * VERSION: v1.6.5
  *
- * POST /api/integrations/octadesk/webhook: Octadesk → reclamações_n1Stats + octadesk_ingest_log. Com OCTADESK_WEBHOOK_SECRET: header ou ?octadesk_webhook_key=; sem variável: POST aberto.
+ * POST /api/integrations/octadesk/webhook: Octadesk → reclamações_n1Stats (ingest v1.12+: motivoReduzido + produto a partir do CF libera_o_chave_pix no payload, sem persistir esse nome) + octadesk_ingest_log. Com OCTADESK_WEBHOOK_SECRET: header ou ?octadesk_webhook_key=; sem variável: POST aberto.
  * POST supervisao/run-hourly: secret em x-octa-supervisao-secret (OCTA_SUPERVISAO_RUN_SECRET); agrega hora anterior + IA opcional.
  */
 

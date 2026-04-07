@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - AbaAuxiliar
- * VERSION: v1.0.5
+ * VERSION: v1.0.6
  *
  * Aba auxiliar (Bacen, Procon, N2, Judicial) com seção de filtros.
  * Mesmas tabelas e gráficos que AbaRA.
@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchStatsAuxiliar } from '../services/api';
-import FiltrosAuxiliar from './FiltrosAuxiliar';
+import FiltrosAuxiliar, { expandProdutosFiltroParaApi } from './FiltrosAuxiliar';
 import ConteudoAuxiliar from './ConteudoAuxiliar';
 
 function AbaAuxiliar({ tipo, refreshTrigger = 0 }) {
@@ -27,7 +27,8 @@ function AbaAuxiliar({ tipo, refreshTrigger = 0 }) {
       const params = {};
       if (dataInicio) params.dataInicio = dataInicio;
       if (dataFim) params.dataFim = dataFim;
-      if (produtos.length > 0) params.produtos = produtos;
+      const produtosApi = expandProdutosFiltroParaApi(produtos);
+      if (produtosApi.length > 0) params.produtos = produtosApi;
       if (motivos.length > 0) params.motivos = motivos;
       const res = await fetchStatsAuxiliar(tipo, params);
       setStats(res.data);
