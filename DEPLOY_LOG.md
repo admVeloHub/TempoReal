@@ -4,6 +4,28 @@
 
 **Data/Hora:** 2026-04-08  
 **Tipo:** Push GitHub  
+**Versão:** `stats.js` v1.20.0 / `octadeskIngestService` v1.14.1 / `LISTA_SCHEMAS` v4.16.20 / `App.js` v1.4.5 / `DashboardReclamacoes` v2.5.8  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.20.0 — card N1: `pixLiberado` conta `escalar_chamado` normalizado ∈ {Casos Especiais - Ouvidoria, Devolutiva, -}; logs `stats v1.20.0`
+- `backend/services/octadeskIngestService.js` v1.14.1 — `escalar_chamado`: Devolutiva, Reabertura, “-”, traços Unicode só-hífen e vazio **não** entram no `$set` (preservam valor válido, ex. Ouvidoria)
+- `LISTA_SCHEMAS.rb` v4.16.20 — notas `escalar_chamado` ingest + stats
+- `src/App.js` v1.4.5 — filtro default: só Antecipação 2026 (remove “Outros Anos” do `DEFAULT_FILTROS`)
+- `src/components/DashboardReclamacoes.js` v2.5.8 — comentário alinhado ao critério Escalado N2
+- `backend/scripts/listN1CardSemClassificacao.js` v1.1.0 — diagnóstico docs N1 fora dos três mostradores do card
+- `backend/scripts/listN2RetidosCpfs.js` v1.2.0 — listagem CPFs retidos N2 (exclui “Outros Anos” por padrão)
+
+### Descrição
+Métrica Escalado N1 alargada no `stats`; ingest deixa de sobrescrever Ouvidoria com estados transitórios do custom field. UI abre com filtro de produto apenas Antecipação - 2026. Scripts auxiliares para conferência no Mongo.
+
+---
+
+## GitHub Push
+
+**Data/Hora:** 2026-04-08  
+**Tipo:** Push GitHub  
 **Versão:** `backend/routes/stats.js` v1.19.1 / `octadeskIngestService` v1.13.0 / LISTA_SCHEMAS v4.16.19 / `src/config.js` v1.2.0  
 **Repositório:** https://github.com/admVeloHub/TempoReal  
 **Branch:** main  

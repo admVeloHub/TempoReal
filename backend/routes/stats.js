@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.19.1
+ * VERSION: v1.20.0
  *
  * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
  *
@@ -17,7 +17,7 @@
  * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0.
  * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
  * N1 resolvido / taxa resolução (card): currentStatusName “Resolvido” (normalizeTextOctadesk), não só Finalizado.Resolvido.
- * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado “Casos Especiais - Ouvidoria”; Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
+ * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado em {Casos Especiais - Ouvidoria, Devolutiva, -} (normalizeTextOctadesk); Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
  * Filtro produto ouvidoria (Bacen, N2, RA, Procon): campo produto.
  * Parâmetro motivo (UI): ouvidoria (Bacen, N2, RA, Procon) usa criarFiltroMotivoItemOuvidoria. N1 ignora produto e motivo no find — o card reflete todos os documentos da collection no período.
  * emAberto ouvidoria: !Finalizado.Resolvido.
@@ -164,10 +164,15 @@ function isDocN1Stats(r) {
   return n != null && String(n).trim() !== '' && !Number.isNaN(Number(n));
 }
 
+/** Rótulos Octadesk que alimentam pixLiberado (Escalado N2) no card N1 após normalizeTextOctadesk. */
+const ESCALADO_N2_LABELS_NORMALIZADOS = new Set(
+  ['Casos Especiais - Ouvidoria', 'Devolutiva', '-'].map((lab) => normalizeTextOctadesk(lab))
+);
+
 function documentoEscaladoN2ContagemN1(r) {
   const v = r?.escalar_chamado;
   if (v == null || String(v).trim() === '') return false;
-  return normalizeTextOctadesk(String(v)) === normalizeTextOctadesk('Casos Especiais - Ouvidoria');
+  return ESCALADO_N2_LABELS_NORMALIZADOS.has(normalizeTextOctadesk(String(v)));
 }
 
 function documentoRetidoContagemN1(r) {
@@ -572,7 +577,7 @@ function initStatsRoutes(connectToMongo) {
         camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'createdAt' },
         campoMotivoFiltro: 'motivoReduzido',
         n1SemFiltroMotivoProduto: true,
-        statsRoute: 'v1.19.1',
+        statsRoute: 'v1.20.0',
         statsTz: STATS_DATE_ZONE,
         dataInicio: dataInicioRaw,
         dataFim: dataFimRaw || '(hoje)',
@@ -591,7 +596,7 @@ function initStatsRoutes(connectToMongo) {
         db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
       ]);
 
-      console.log('[GET /api/stats] stats v1.19.1 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
+      console.log('[GET /api/stats] stats v1.20.0 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
 
       const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
 

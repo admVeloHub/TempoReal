@@ -1,5 +1,5 @@
 listagem de schema de coleções do mongoDB
-  <!-- VERSION: v4.16.19 | DATE: 2026-04-07 | AUTHOR: VeloHub Development Team -->
+  <!-- VERSION: v4.16.20 | DATE: 2026-04-08 | AUTHOR: VeloHub Development Team -->
  
     🗄️ Database: console_conteudo
    
@@ -807,13 +807,13 @@ listagem de schema de coleções do mongoDB
   // - email: 1 (índice esparso para buscas por email)
   // - createdAt: -1 (índice para ordenação)
   
-  //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1) — LISTA v4.16.19: motivoReduzido String; produto fixo Antecipação - 2026; sem motivos_chave_pix/libera_o_chave_pix/pixLiberado no documento
+  //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1) — LISTA v4.16.20: motivoReduzido String; produto fixo Antecipação - 2026; sem motivos_chave_pix/libera_o_chave_pix/pixLiberado no documento
   {
   _id: ObjectId,
   octadeskNumber: Number,           // Ticket Octadesk (único); no POST do webhook vem como Number (JSON raiz)
   cpf: String,                     // Origem CustomField cpf_do_titular no webhook
   motivoReduzido: String,          // Texto canónico alinhado à elegibilidade chave pix (ingest grava; payload Octadesk pode ler CF motivos_chave_pix — não persistir esse nome)
-  escalar_chamado: String,        // CustomField escalar_chamado quando a chave vem no POST (String ou null; não entra no critério skipped/upsert)
+  escalar_chamado: String,        // CustomField escalar_chamado quando a chave vem no POST (String ou null; não entra no critério skipped/upsert). Ingest v1.14.1+: Devolutiva/Reabertura/“-” (e traços Unicode só-hífen)/vazio não entram no $set (preservam valor válido anterior). Card N1 pixLiberado: stats ∈ {Ouvidoria, Devolutiva, -}
   currentStatusName: String,      // Octadesk: métricas resolução N1 por status "Resolvido" (normalizeTextOctadesk); Finalizado espelha resolução no ingest
   retido_no_atendimento: Boolean, // Único critério retido vs liberado (espelho CustomField); stats N1 usam este campo
   produto: String,                // Linha N1: valor fixo persistido "Antecipação - 2026" (ingest + script normalizeN1ProdutoAntecipacao2026); CF libera_o_chave_pix não alimenta este campo

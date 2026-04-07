@@ -1,8 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - Octadesk ingest (helpers + webhook N1 + logs / índices)
- * VERSION: v1.13.0
+ * VERSION: v1.14.1
  *
  * POST /api/integrations/octadesk/webhook: persiste em reclamações_n1Stats quando CF/tópico atende critério chave pix.
+ * escalar_chamado: valores transitórios (Devolutiva, Reabertura, placeholder “-”/traços Unicode só hífen, vazio, lista ESCALAR_CHAMADO_UPSERT_IGNORAR_LITERALES) não vão ao $set — não apagam nem substituem “Casos Especiais - Ouvidoria” já gravado.
  * Documento: motivoReduzido (String canónica "Liberação chave pix"); produto fixo "Antecipação - 2026" na linha N1 (CF libera_o_chave_pix não grava produto; sem persistir libera_o_chave_pix / motivos_chave_pix / pixLiberado no Mongo).
  * Logs em octadesk_ingest_log; stats usam motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido).
  * Autenticação do webhook (opcional): OCTADESK_WEBHOOK_SECRET vazio = POST aberto (arriscado). Com segredo: mesmo valor em header (x-api-key / x-octadesk-webhook-secret)
@@ -13,7 +14,7 @@
 const crypto = require('crypto');
 const os = require('os');
 
-const INGEST_SERVICE_VERSION = 'v1.13.0';
+const INGEST_SERVICE_VERSION = 'v1.14.1';
 
 /**
  * Identifica o processo que executou processOctadeskN1Webhook (gravado no octadesk_ingest_log).
@@ -665,6 +666,33 @@ function statusResolvidoFromBody(body) {
   return normalizeTextOctadesk(String(name)) === normalizeTextOctadesk('Resolvido');
 }
 
+/**
+ * Rótulos de escalar_chamado que não são resultado estável no Octadesk: não entram no $set.
+ * Webhooks posteriores com um destes valores não sobrescrevem "Casos Especiais - Ouvidoria" (ou outro valor válido) já persistido.
+ */
+const ESCALAR_CHAMADO_UPSERT_IGNORAR_LITERALES = [
+  'Devolutiva',
+  'Reabertura',
+  'Reabertura do chamado',
+  '-', // mesmo tratamento que en/em dash só-hífen (ver abaixo)
+];
+
+const ESCALAR_CHAMADO_UPSERT_IGNORAR_NORM = new Set(
+  ESCALAR_CHAMADO_UPSERT_IGNORAR_LITERALES.map((lab) => normalizeTextOctadesk(lab))
+);
+
+/** Traços Unicode que formulários costumam usar no lugar de '-' (placeholder “sem seleção”). */
+const ESCALAR_CHAMADO_UNICODE_HYPHENS = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g;
+
+/** true = não incluir escalar_chamado no $set (mantém valor anterior no documento). */
+function escalarChamadoIncomingDeveSerIgnoradoNoUpsert(displayScalar) {
+  const unified = String(displayScalar ?? '').replace(ESCALAR_CHAMADO_UNICODE_HYPHENS, '-');
+  const norm = normalizeTextOctadesk(unified);
+  if (!norm) return true;
+  if (/^-+$/.test(norm)) return true;
+  return ESCALAR_CHAMADO_UPSERT_IGNORAR_NORM.has(norm);
+}
+
 function buildN1WebhookUpsert(coerced, cf, octadeskNumber, now) {
   const retido = coerceRetidoNoAtendimento(getCustomFieldValue(cf, 'retido_no_atendimento'));
   const cpfRaw = getCustomFieldValue(cf, 'cpf_do_titular');
@@ -690,7 +718,10 @@ function buildN1WebhookUpsert(coerced, cf, octadeskNumber, now) {
 
   if (cfHasNormalizedKey(cf, 'escalar_chamado')) {
     const r = getCustomFieldValue(cf, 'escalar_chamado');
-    $set.escalar_chamado = r === null ? null : scalarCustomFieldValue(r);
+    const escDisplay = r == null ? '' : scalarCustomFieldValue(r);
+    if (!escalarChamadoIncomingDeveSerIgnoradoNoUpsert(escDisplay)) {
+      $set.escalar_chamado = escDisplay === '' ? null : escDisplay;
+    }
   }
 
   const createdAtInsert = parseDataEntradaN1FromBody(coerced) || now;

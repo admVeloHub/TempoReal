@@ -1,6 +1,6 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.4.4
+ * VERSION: v1.4.5
  *
  * Login obrigatório (acessos.tempoReal em qualidade_funcionarios).
  * Polling a cada 60 segundos. Filtros da home configuráveis via modal. Sessão em localStorage até logout ou expiração (4h).
@@ -21,7 +21,6 @@ import {
   MultiSelectDropdown,
   expandProdutosFiltroParaApi,
   PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026,
-  PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS,
 } from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
@@ -38,12 +37,9 @@ function isHookPath() {
   return pathNormalized() === '/hook';
 }
 
-/** Filtros ao abrir: grupos Antecipação, motivo Liberação chave pix, período 01/01/2026. GET /api/stats: Produto/Motivo afetam só ouvidoria; card N1 = todos os docs N1 no período (só createdAt). */
+/** Filtros ao abrir: só Antecipação - 2026; motivo Liberação chave pix; período 01/01/2026. GET /api/stats: Produto/Motivo afetam só ouvidoria; card N1 = todos os docs N1 no período (só createdAt). */
 const DEFAULT_FILTROS = {
-  produtos: [
-    PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026,
-    PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS,
-  ],
+  produtos: [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026],
   motivos: ['Liberação chave pix'],
   dataInicio: '2026-01-01',
   dataFim: '',
