@@ -1,9 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - FiltrosAuxiliar
- * VERSION: v1.2.8
+ * VERSION: v1.2.9
  *
  * Seção de filtros compartilhada: início, fim, produto, motivo, Atualizar.
- * Produto Antecipação 2026 / Outros anos: um rótulo cada; na API expande atual + legado juntos.
+ * Grupo 2026 na API: Antecipação - 2026, Antecipação 2026. Grupo Outros: inclui produto literal "Antecipação".
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,8 +14,12 @@ export const PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS = 'grp:antecipacao-outr
 
 /** N1 no GET /api/stats: só período em createdAt; Produto e Motivo da UI filtram apenas Bacen/RA/N2/Procon. */
 const PRODUTO_GRUPOS_PARA_API = {
-  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026]: ['Antecipação - 2026', 'Antecipação 2026', 'Antecipação'],
-  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS]: ['Antecipação - Outros Anos', 'Antecipacao'],
+  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026]: ['Antecipação - 2026', 'Antecipação 2026'],
+  [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_OUTROS_ANOS]: [
+    'Antecipação - Outros Anos',
+    'Antecipacao',
+    'Antecipação',
+  ],
 };
 
 /**

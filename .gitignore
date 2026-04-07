@@ -29,3 +29,6 @@ npm-debug.log*
 
 # Backups locais Mongo (podem conter dados sensíveis)
 backend/backups/
+
+# Relatórios/auditorias geradas localmente (scripts em backend/scripts/)
+backend/reports/

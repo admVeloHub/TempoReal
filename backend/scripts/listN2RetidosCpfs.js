@@ -1,9 +1,11 @@
 /**
  * Lista CPFs dos casos N2 (reclamacoes_n2Pix) contados como "Retidos" no card/métricas
  * do Dashboard — mesma lógica que stats.js calcularStatsPorTipo (somaRetidos).
- * VERSION: v1.2.0
+ * VERSION: v1.3.1
  * v1.1.0: tabela CPF + Finalizado.dataResolucao + pixLiberado (fuso STATS_TZ).
- * v1.2.0: por padrão exclui produto "Antecipação - Outros Anos" (literal + variantes + só "Antecipação" sem ano, alinhado a ConteudoAuxiliar rotuloProdutoPivot). INCLUIR_OUTROS_ANOS=1 para listar também esses.
+ * v1.2.0: exclusão opcional grupo API Outros.
+ * v1.3.0: exclusão grupo API Outros (literais).
+ * v1.3.1: "Antecipação" = Outros Anos (produto); grupo 2026 só dois literais — MOTIVO_PARAM alinhado a stats.
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/listN2RetidosCpfs.js
@@ -11,7 +13,7 @@
  * Opcional:
  *   DATA_INICIO=2026-01-01 DATA_FIM=2026-04-30
  *   PRODUTO=a,b  MOTIVO=c,d  (mesma semântica que GET /api/stats — CSV)
- *   INCLUIR_OUTROS_ANOS=1  — inclui na tabela retidos com produto "Antecipação - Outros Anos" (padrão: excluídos)
+ *   INCLUIR_OUTROS_ANOS=1  — inclui retidos com produto do grupo API Outros (rótulos no header v1.3); padrão: excluídos
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -33,30 +35,19 @@ const MOTIVO_LIBERACAO_CHAVE_PIX_SEM_ACENTO = 'liberacao chave pix';
 const MOTIVO_UI_LIBERACAO_CHAVE_PIX = 'Liberação chave pix';
 
 const MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA = {
-  'Antecipação - 2026': ['Antecipação - 2026', 'Antecipação 2026', 'Antecipação'],
-  'Antecipação - Outros Anos': ['Antecipação - Outros Anos', 'Antecipacao'],
+  'Antecipação - 2026': ['Antecipação - 2026', 'Antecipação 2026'],
+  'Antecipação - Outros Anos': ['Antecipação - Outros Anos', 'Antecipacao', 'Antecipação'],
 };
 
-/** Mesmos rótulos que stats/FiltrosAuxiliar para o grupo "Outros Anos"; comparação com normalizeTextOctadesk. */
-const PRODUTO_OUTROS_ANOS_NORMALIZADO = new Set(
-  (MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA['Antecipação - Outros Anos'] || []).map((x) =>
-    normalizeTextOctadesk(String(x))
-  )
-);
-
 /**
- * Produto enquadrado em "Antecipação - Outros Anos" (excluir da listagem retida sob demanda).
- * Inclui "Antecipação" sem dígito de ano (ConteudoAuxiliar.rotuloProdutoPivot).
+ * Grupo API "Outros Anos" — inclui produto literal "Antecipação" (alinhado FiltrosAuxiliar / stats v1.20.2).
  */
-function produtoEhAntecipacaoOutrosAnos(produto) {
+function produtoEhGrupoApiOutrosAnos(produto) {
   if (produto == null || String(produto).trim() === '') return false;
   const s = String(produto).trim();
-  if (PRODUTO_OUTROS_ANOS_NORMALIZADO.has(normalizeTextOctadesk(s))) return true;
-  if (!/\d/.test(s)) {
-    const semDiac = s.normalize('NFD').replace(/\p{M}/gu, '');
-    const canon = semDiac.toLowerCase().replace(/\s+/g, '');
-    if (canon === 'antecipacao') return true;
-  }
+  if (s === 'Antecipação - Outros Anos' || s === 'Antecipacao' || s === 'Antecipação') return true;
+  const n = normalizeTextOctadesk(s);
+  if (n === normalizeTextOctadesk('Antecipação - Outros Anos')) return true;
   return false;
 }
 
@@ -259,7 +250,7 @@ async function main() {
   const retidosBrutos = docs.filter(documentoContaComoRetidoPorTipoOuvidoria);
   const incluirOutrosAnos =
     process.env.INCLUIR_OUTROS_ANOS === '1' || String(process.env.INCLUIR_OUTROS_ANOS || '').toLowerCase() === 'true';
-  const retidosExclOutros = retidosBrutos.filter((r) => !produtoEhAntecipacaoOutrosAnos(r.produto));
+  const retidosExclOutros = retidosBrutos.filter((r) => !produtoEhGrupoApiOutrosAnos(r.produto));
   const retidos = incluirOutrosAnos ? retidosBrutos : retidosExclOutros;
   const qtdExclOutros = retidosBrutos.length - retidosExclOutros.length;
 

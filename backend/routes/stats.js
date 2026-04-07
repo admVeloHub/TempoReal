@@ -1,6 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.20.0
+ * VERSION: v1.20.3
+ * v1.20.1: exports de helpers de filtro para scripts (relatório N2 = mesmo predicado Mongo do GET /).
+ * v1.20.2: produto literal "Antecipação" alinhado a Outros Anos; MOTIVO_PARAM idem.
+ * v1.20.3: exports calcularStatsPorTipo, calcularStatsCardN1, enrichComMostradoresOuvidoria (auditoria cards = GET /).
  *
  * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
  *
@@ -90,8 +93,8 @@ function normalizarDetalheStats(s) {
 const DETALHE_LIBERACAO_CHAVE_PIX_NORM = 'liberacao chave pix';
 /** Motivos da UI que identificam linha de produto Antecipação; em ouvidoria o valor costuma estar em produto, não em motivoReduzido. */
 const MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA = {
-  'Antecipação - 2026': ['Antecipação - 2026', 'Antecipação 2026', 'Antecipação'],
-  'Antecipação - Outros Anos': ['Antecipação - Outros Anos', 'Antecipacao'],
+  'Antecipação - 2026': ['Antecipação - 2026', 'Antecipação 2026'],
+  'Antecipação - Outros Anos': ['Antecipação - Outros Anos', 'Antecipacao', 'Antecipação'],
 };
 
 /** Rótulo do filtro “Motivo” = liberação chave Pix: no Octadesk também vem “Chave Pix” sem “Liberação”. */
@@ -1017,3 +1020,13 @@ function initStatsRoutes(connectToMongo) {
 module.exports = initStatsRoutes;
 /** Diagnóstico / scripts: mesmo predicado de período N1 do GET /. */
 module.exports.criarFiltroPeriodoN1PorCreatedAt = criarFiltroPeriodoN1PorCreatedAt;
+/** Scripts / relatórios: mesmo Mongo query que GET /api/stats para ouvidoria. */
+module.exports.normalizarIntervaloDatasQueryStats = normalizarIntervaloDatasQueryStats;
+module.exports.criarFiltroDataPorCollection = criarFiltroDataPorCollection;
+module.exports.criarFiltroProduto = criarFiltroProduto;
+module.exports.criarFiltroMotivo = criarFiltroMotivo;
+module.exports.mesclarFiltros = mesclarFiltros;
+/** Mesmas funções do corpo do GET / para montar porTipo (scripts de auditoria). */
+module.exports.calcularStatsPorTipo = calcularStatsPorTipo;
+module.exports.calcularStatsCardN1 = calcularStatsCardN1;
+module.exports.enrichComMostradoresOuvidoria = enrichComMostradoresOuvidoria;

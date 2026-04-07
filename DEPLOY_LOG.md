@@ -2,6 +2,28 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-04-08 (registro pré-push)  
+**Tipo:** Push GitHub  
+**Versão:** `stats.js` v1.20.3 / `FiltrosAuxiliar` v1.2.9 / `relatorioAdministrativoN2Pix` v1.2.0 / `listN2RetidosCpfs` v1.3.1 / `auditoriaCardsStats` v1.0.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/components/FiltrosAuxiliar.js` v1.2.9 — grupo API 2026: `Antecipação - 2026`, `Antecipação 2026`; grupo Outros Anos inclui produto literal `Antecipação` (alinha Bacen/N2/RA/Procon)
+- `backend/routes/stats.js` v1.20.3 — `MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA` idem; exports para scripts: filtros + `calcularStatsPorTipo` / `calcularStatsCardN1` / `enrichComMostradoresOuvidoria`
+- `src/App.js` — comentário do filtro padrão ao abrir (grupo 2026 vs `Antecipação` sozinha = Outros)
+- `backend/scripts/relatorioAdministrativoN2Pix.js` v1.2.0 — relatório administrativo N2 + conferência com mesmo `find` que GET /api/stats
+- `backend/scripts/listN2RetidosCpfs.js` v1.3.1 — exclusão Outros / tabela CPF; `MOTIVO_PARAM` alinhado ao stats
+- `backend/scripts/auditoriaCardsStats.js` v1.0.0 — auditoria porTipo de todos os cards (pipeline idêntico à rota)
+- `.gitignore` — `backend/reports/` (saídas locais dos scripts)
+
+### Descrição
+Regra de negócio: `produto` "Antecipação" trata-se como Outros Anos no filtro; linha 2026 só hífen e "Antecipação 2026". Scripts operacionais e exports em `stats` para conferência sem duplicar lógica. Artefatos em `backend/reports/` ignorados no Git.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-08  
 **Tipo:** Push GitHub  
 **Versão:** `stats.js` v1.20.0 / `octadeskIngestService` v1.14.1 / `LISTA_SCHEMAS` v4.16.20 / `App.js` v1.4.5 / `DashboardReclamacoes` v2.5.8  

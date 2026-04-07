@@ -37,7 +37,7 @@ function isHookPath() {
   return pathNormalized() === '/hook';
 }
 
-/** Filtros ao abrir: só Antecipação - 2026; motivo Liberação chave pix; período 01/01/2026. GET /api/stats: Produto/Motivo afetam só ouvidoria; card N1 = todos os docs N1 no período (só createdAt). */
+/** Filtros ao abrir: grupo produto 2026 (= Antecipação - 2026 + Antecipação 2026 no $in; não inclui "Antecipação" sozinha — essa é Outros Anos); motivo Liberação chave pix; período 01/01/2026. */
 const DEFAULT_FILTROS = {
   produtos: [PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026],
   motivos: ['Liberação chave pix'],
