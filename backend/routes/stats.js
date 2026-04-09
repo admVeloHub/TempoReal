@@ -1,9 +1,11 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.20.3
+ * VERSION: v1.20.5
  * v1.20.1: exports de helpers de filtro para scripts (relatório N2 = mesmo predicado Mongo do GET /).
  * v1.20.2: produto literal "Antecipação" alinhado a Outros Anos; MOTIVO_PARAM idem.
  * v1.20.3: exports calcularStatsPorTipo, calcularStatsCardN1, enrichComMostradoresOuvidoria (auditoria cards = GET /).
+ * v1.20.4: auditoriaPainelPredicatesPorDoc (scripts backup N2Pix / reconciliação com calcularStatsPorTipo).
+ * v1.20.5: ouvidoria → pixRetido/somaRetidos exclui caso com semRespostaCliente === true (excludente com mostrador Sem resposta).
  *
  * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
  *
@@ -17,7 +19,7 @@
  * - N1 Octadesk (card): período só em createdAt (LISTA_SCHEMAS). Sem filtro produto/motivo da UI: reclamações_n1Stats já é só tickets N1 elegíveis ao ingest.
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
- * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0.
+ * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0. Ouvidoria (não-N1): retido só se semRespostaCliente !== true.
  * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
  * N1 resolvido / taxa resolução (card): currentStatusName “Resolvido” (normalizeTextOctadesk), não só Finalizado.Resolvido.
  * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado em {Casos Especiais - Ouvidoria, Devolutiva, -} (normalizeTextOctadesk); Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
@@ -489,7 +491,11 @@ function calcularStatsPorTipo(docs) {
   const somaRetidos =
     docs.filter((r) => isDocN1Stats(r) && documentoRetidoContagemN1(r)).length +
     docsLiberacaoChavePix.filter(
-      (r) => !isDocN1Stats(r) && documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r)
+      (r) =>
+        !isDocN1Stats(r) &&
+        documentoResolvidoParaMetricas(r) &&
+        !documentoLiberadoChavePixParaMetricas(r) &&
+        r.semRespostaCliente !== true
     ).length;
 
   const pixLiberado = somaEscaladoN2;
@@ -519,6 +525,45 @@ function enrichComMostradoresOuvidoria(baseStats, docs) {
   ).length;
   const opCancelada = docs.filter((r) => motivoContemCancelamento7Dias(r.motivoReduzido)).length;
   return { ...baseStats, semResposta, opCancelada };
+}
+
+/**
+ * Predicados do card porTipo (calcularStatsPorTipo + enrich) por documento — só para scripts de auditoria/backup.
+ * Não altera GET /api/stats nem estruturas de resposta.
+ */
+function auditoriaPainelPredicatesPorDoc(r) {
+  if (r == null) return null;
+  const n1 = isDocN1Stats(r);
+  const libExclusivo = documentoELiberacaoChavePixExclusivo(r);
+  const resolvido = documentoResolvidoParaMetricas(r);
+  const liberadoPix = documentoLiberadoChavePixParaMetricas(r);
+  const retidoN1 = documentoRetidoContagemN1(r);
+  const escaladoN2N1 = documentoEscaladoN2ContagemN1(r);
+  const emAbertoCard = n1 ? documentoEmAbertoN1PorStatus(r) : !resolvido;
+  const caEProtocolos = (
+    r.acionouCentral === true ||
+    (r.protocolosCentral && Array.isArray(r.protocolosCentral) && r.protocolosCentral.length > 0) ||
+    r.n2SegundoNivel === true ||
+    (r.protocolosN2 && Array.isArray(r.protocolosN2) && r.protocolosN2.length > 0) ||
+    r.reclameAqui === true ||
+    (r.protocolosReclameAqui && Array.isArray(r.protocolosReclameAqui) && r.protocolosReclameAqui.length > 0) ||
+    r.procon === true ||
+    (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
+  );
+  return {
+    isDocN1Stats: n1,
+    liberacaoChavePixExclusivo: libExclusivo,
+    resolvidoParaMetricas: resolvido,
+    liberadoChavePixParaMetricas: liberadoPix,
+    emAbertoCard,
+    contribuiCaEProtocolos: caEProtocolos,
+    contribuiSolLiberacao: libExclusivo,
+    contribuiPixLiberadoCard: n1 ? escaladoN2N1 : libExclusivo && liberadoPix,
+    contribuiPixRetidoCard:
+      n1 ? retidoN1 : libExclusivo && resolvido && !liberadoPix && r.semRespostaCliente !== true,
+    semRespostaClienteAposResolvido: resolvido && r.semRespostaCliente === true,
+    opCanceladaMotivo7Dias: motivoContemCancelamento7Dias(r.motivoReduzido),
+  };
 }
 
 /**
@@ -1030,3 +1075,4 @@ module.exports.mesclarFiltros = mesclarFiltros;
 module.exports.calcularStatsPorTipo = calcularStatsPorTipo;
 module.exports.calcularStatsCardN1 = calcularStatsCardN1;
 module.exports.enrichComMostradoresOuvidoria = enrichComMostradoresOuvidoria;
+module.exports.auditoriaPainelPredicatesPorDoc = auditoriaPainelPredicatesPorDoc;

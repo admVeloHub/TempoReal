@@ -1,6 +1,6 @@
 /**
  * Relatório administrativo — hub_ouvidoria.reclamacoes_n2Pix
- * VERSION: v1.2.0
+ * VERSION: v1.2.1
  *
  * Gera arquivo em backend/reports/ com: total geral, totais por faixa de produto
  * Antecipação alinhados a FiltrosAuxiliar.PRODUTO_GRUPOS_PARA_API (mesmo $in do GET /api/stats),
@@ -13,6 +13,7 @@
  * v1.1.2 — conferência usa find Mongo com stats.js (mesmo predicado do GET /api/stats).
  * v1.1.3 — notas: n2Pix sem octadeskNumber; contagens por string exata de produto.
  * v1.2.0 — produto "Antecipação" = grupo Outros Anos (regra de negócio); grupo 2026 só hífen + "Antecipação 2026".
+ * v1.2.1 — retido ouvidoria não conta se semRespostaCliente === true (stats.js v1.20.5).
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/relatorioAdministrativoN2Pix.js
@@ -166,6 +167,7 @@ function documentoContaComoRetidoPorTipoOuvidoria(r) {
   if (isDocN1Stats(r) && documentoRetidoContagemN1(r)) return true;
   if (!documentoELiberacaoChavePixExclusivo(r)) return false;
   if (isDocN1Stats(r)) return false;
+  if (r.semRespostaCliente === true) return false;
   return documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r);
 }
 
@@ -222,7 +224,11 @@ function metricasCardN2ComoApi(docs) {
   const somaRetidos =
     docs.filter((r) => isDocN1Stats(r) && documentoRetidoContagemN1(r)).length +
     docsLiberacaoChavePix.filter(
-      (r) => !isDocN1Stats(r) && documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r)
+      (r) =>
+        !isDocN1Stats(r) &&
+        documentoResolvidoParaMetricas(r) &&
+        !documentoLiberadoChavePixParaMetricas(r) &&
+        r.semRespostaCliente !== true
     ).length;
 
   const pixLiberado = somaEscaladoN2;

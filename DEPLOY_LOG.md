@@ -2,6 +2,25 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-04-07  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.20.5 / `listN2RetidosCpfs.js` v1.3.2 / `relatorioAdministrativoN2Pix.js` v1.2.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.20.5 — ouvidoria (não-N1): `pixRetido` / `somaRetidos` exclui `semRespostaCliente === true`; `auditoriaPainelPredicatesPorDoc.contribuiPixRetidoCard` alinhado
+- `backend/scripts/listN2RetidosCpfs.js` v1.3.2 — mesmo critério de retido que o stats
+- `backend/scripts/relatorioAdministrativoN2Pix.js` v1.2.1 — idem em `documentoContaComoRetidoPorTipoOuvidoria` e `metricasCardN2ComoApi`
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Excludente com o mostrador Sem resposta: caso resolvido com `semRespostaCliente` verdadeiro deixa de contar como Retido; `percRetencao` deriva do novo `pixRetido`. Ramo N1 (`retido_no_atendimento`) inalterado.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-08 (registro pré-push)  
 **Tipo:** Push GitHub  
 **Versão:** `stats.js` v1.20.3 / `FiltrosAuxiliar` v1.2.9 / `relatorioAdministrativoN2Pix` v1.2.0 / `listN2RetidosCpfs` v1.3.1 / `auditoriaCardsStats` v1.0.0  
