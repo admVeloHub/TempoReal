@@ -1,6 +1,6 @@
 /**
  * Relatório administrativo — hub_ouvidoria.reclamacoes_n2Pix
- * VERSION: v1.2.1
+ * VERSION: v1.2.2
  *
  * Gera arquivo em backend/reports/ com: total geral, totais por faixa de produto
  * Antecipação alinhados a FiltrosAuxiliar.PRODUTO_GRUPOS_PARA_API (mesmo $in do GET /api/stats),
@@ -14,6 +14,7 @@
  * v1.1.3 — notas: n2Pix sem octadeskNumber; contagens por string exata de produto.
  * v1.2.0 — produto "Antecipação" = grupo Outros Anos (regra de negócio); grupo 2026 só hífen + "Antecipação 2026".
  * v1.2.1 — retido ouvidoria não conta se semRespostaCliente === true (stats.js v1.20.5).
+ * v1.2.2 — Liberados/Retidos/Sem resposta/Op. cancelada alinhados à classificação excludente stats v1.21.0.
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/relatorioAdministrativoN2Pix.js
@@ -162,13 +163,10 @@ function documentoLiberadoChavePixParaMetricas(r) {
   return false;
 }
 
-/** Igual somaRetidos em stats.js calcularStatsPorTipo. */
+/** Igual somaRetidos em stats.js calcularStatsPorTipo (v1.21.0). */
 function documentoContaComoRetidoPorTipoOuvidoria(r) {
   if (isDocN1Stats(r) && documentoRetidoContagemN1(r)) return true;
-  if (!documentoELiberacaoChavePixExclusivo(r)) return false;
-  if (isDocN1Stats(r)) return false;
-  if (r.semRespostaCliente === true) return false;
-  return documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r);
+  return statsRoute.classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'retido';
 }
 
 const ESCALADO_N2_LABELS_NORMALIZADOS = new Set(
@@ -220,16 +218,10 @@ function metricasCardN2ComoApi(docs) {
 
   const somaEscaladoN2 =
     docs.filter((r) => isDocN1Stats(r) && documentoEscaladoN2ContagemN1(r)).length +
-    docsLiberacaoChavePix.filter((r) => !isDocN1Stats(r) && documentoLiberadoChavePixParaMetricas(r)).length;
+    docs.filter((r) => statsRoute.classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length;
   const somaRetidos =
     docs.filter((r) => isDocN1Stats(r) && documentoRetidoContagemN1(r)).length +
-    docsLiberacaoChavePix.filter(
-      (r) =>
-        !isDocN1Stats(r) &&
-        documentoResolvidoParaMetricas(r) &&
-        !documentoLiberadoChavePixParaMetricas(r) &&
-        r.semRespostaCliente !== true
-    ).length;
+    docs.filter((r) => statsRoute.classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'retido').length;
 
   const pixLiberado = somaEscaladoN2;
   const pixRetido = somaRetidos;
@@ -238,9 +230,11 @@ function metricasCardN2ComoApi(docs) {
   const taxaResolucao = ocorrencias > 0 ? Math.round((resolvido / ocorrencias) * 1000) / 10 : 0;
 
   const semResposta = docs.filter(
-    (r) => documentoResolvidoParaMetricas(r) && r.semRespostaCliente === true
+    (r) => statsRoute.classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'semResposta'
   ).length;
-  const opCancelada = docs.filter((r) => motivoContemCancelamento7Dias(r.motivoReduzido)).length;
+  const opCancelada = docs.filter(
+    (r) => statsRoute.classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'opCancelada'
+  ).length;
 
   return {
     ocorrencias,

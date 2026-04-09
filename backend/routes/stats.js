@@ -1,13 +1,14 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.20.5
+ * VERSION: v1.21.0
  * v1.20.1: exports de helpers de filtro para scripts (relatório N2 = mesmo predicado Mongo do GET /).
  * v1.20.2: produto literal "Antecipação" alinhado a Outros Anos; MOTIVO_PARAM idem.
  * v1.20.3: exports calcularStatsPorTipo, calcularStatsCardN1, enrichComMostradoresOuvidoria (auditoria cards = GET /).
  * v1.20.4: auditoriaPainelPredicatesPorDoc (scripts backup N2Pix / reconciliação com calcularStatsPorTipo).
  * v1.20.5: ouvidoria → pixRetido/somaRetidos exclui caso com semRespostaCliente === true (excludente com mostrador Sem resposta).
+ * v1.21.0: ouvidoria não‑N1 — desdobramento excludente (classificacaoDesdobramentoOuvidoriaNaoN1): Em aberto → Sem resposta → Op. cancelada → Liberado/Retido (só Liberação Chave Pix); Liberado só se resolvido.
  *
- * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2 somam semResposta, opCancelada.
+ * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2: semResposta/opCancelada/pixLiberado/pixRetido com a mesma exclusividade (soma dos desdobramentos ≤ ocorrências).
  *
  * GET /: dataInicio, dataFim (YYYY-MM-DD). Intervalo = início/fim do dia no fuso STATS_TZ (padrão America/Sao_Paulo), não meia-noite UTC. Default início 2026-01-01; fim omitido = fim do dia nesse fuso hoje.
  *
@@ -19,7 +20,7 @@
  * - N1 Octadesk (card): período só em createdAt (LISTA_SCHEMAS). Sem filtro produto/motivo da UI: reclamações_n1Stats já é só tickets N1 elegíveis ao ingest.
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
- * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0. Ouvidoria (não-N1): retido só se semRespostaCliente !== true.
+ * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0. Ouvidoria (não-N1): pixLiberado/pixRetido e mostradores enrich seguem classificação excludente (v1.21.0).
  * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
  * N1 resolvido / taxa resolução (card): currentStatusName “Resolvido” (normalizeTextOctadesk), não só Finalizado.Resolvido.
  * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado em {Casos Especiais - Ouvidoria, Devolutiva, -} (normalizeTextOctadesk); Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
@@ -428,6 +429,22 @@ function documentoLiberadoChavePixParaMetricas(r) {
 }
 
 /**
+ * Desdobramento excludente nos cards ouvidoria (não‑N1): cada documento em no máximo uma classe exibida —
+ * emAberto | semResposta | opCancelada | liberado | retido | outros.
+ * Prioridade: não resolvido → semRespostaCliente → motivo cancelamento 7 dias → (universo Lib. Chave Pix) liberado vs retido.
+ * "Liberado" no painel só após resolvido; pixLiberado legado sem Resolvido cai em Em aberto, não em Liberados.
+ */
+function classificacaoDesdobramentoOuvidoriaNaoN1(r) {
+  if (r == null || isDocN1Stats(r)) return null;
+  if (!documentoResolvidoParaMetricas(r)) return 'emAberto';
+  if (r.semRespostaCliente === true) return 'semResposta';
+  if (motivoContemCancelamento7Dias(r.motivoReduzido)) return 'opCancelada';
+  if (!documentoELiberacaoChavePixExclusivo(r)) return 'outros';
+  if (documentoLiberadoChavePixParaMetricas(r)) return 'liberado';
+  return 'retido';
+}
+
+/**
  * Métricas do card N1 sobre o conjunto já filtrado (LISTA_SCHEMAS: escalar_chamado, retido_no_atendimento, currentStatusName).
  * Mantém chaves do JSON esperadas pelo Dashboard (pixLiberado = Escalado N2, pixRetido = Retidos).
  */
@@ -484,19 +501,13 @@ function calcularStatsPorTipo(docs) {
   const docsLiberacaoChavePix = docs.filter((r) => documentoELiberacaoChavePixExclusivo(r));
   const solLiberacao = docsLiberacaoChavePix.length;
 
-  /** N1: Escalado N2 e Retidos sobre todas as ocorrências; demais canais inalterados (só docs Liberação Chave Pix). */
+  /** N1: Escalado N2 e Retidos sobre todas as ocorrências; ouvidoria: Liberados/Retidos = classes excludentes (v1.21.0). */
   const somaEscaladoN2 =
     docs.filter((r) => isDocN1Stats(r) && documentoEscaladoN2ContagemN1(r)).length +
-    docsLiberacaoChavePix.filter((r) => !isDocN1Stats(r) && documentoLiberadoChavePixParaMetricas(r)).length;
+    docs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length;
   const somaRetidos =
     docs.filter((r) => isDocN1Stats(r) && documentoRetidoContagemN1(r)).length +
-    docsLiberacaoChavePix.filter(
-      (r) =>
-        !isDocN1Stats(r) &&
-        documentoResolvidoParaMetricas(r) &&
-        !documentoLiberadoChavePixParaMetricas(r) &&
-        r.semRespostaCliente !== true
-    ).length;
+    docs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'retido').length;
 
   const pixLiberado = somaEscaladoN2;
   const pixRetido = somaRetidos;
@@ -520,10 +531,8 @@ function calcularStatsPorTipo(docs) {
 
 /** Mostradores adicionais dos cards ouvidoria (Bacen, N2, RA, Procon): LISTA_SCHEMAS semRespostaCliente + motivo cancelamento 7 dias. */
 function enrichComMostradoresOuvidoria(baseStats, docs) {
-  const semResposta = docs.filter(
-    (r) => documentoResolvidoParaMetricas(r) && r.semRespostaCliente === true
-  ).length;
-  const opCancelada = docs.filter((r) => motivoContemCancelamento7Dias(r.motivoReduzido)).length;
+  const semResposta = docs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'semResposta').length;
+  const opCancelada = docs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'opCancelada').length;
   return { ...baseStats, semResposta, opCancelada };
 }
 
@@ -550,6 +559,7 @@ function auditoriaPainelPredicatesPorDoc(r) {
     r.procon === true ||
     (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
   );
+  const cls = n1 ? null : classificacaoDesdobramentoOuvidoriaNaoN1(r);
   return {
     isDocN1Stats: n1,
     liberacaoChavePixExclusivo: libExclusivo,
@@ -558,11 +568,10 @@ function auditoriaPainelPredicatesPorDoc(r) {
     emAbertoCard,
     contribuiCaEProtocolos: caEProtocolos,
     contribuiSolLiberacao: libExclusivo,
-    contribuiPixLiberadoCard: n1 ? escaladoN2N1 : libExclusivo && liberadoPix,
-    contribuiPixRetidoCard:
-      n1 ? retidoN1 : libExclusivo && resolvido && !liberadoPix && r.semRespostaCliente !== true,
-    semRespostaClienteAposResolvido: resolvido && r.semRespostaCliente === true,
-    opCanceladaMotivo7Dias: motivoContemCancelamento7Dias(r.motivoReduzido),
+    contribuiPixLiberadoCard: n1 ? escaladoN2N1 : cls === 'liberado',
+    contribuiPixRetidoCard: n1 ? retidoN1 : cls === 'retido',
+    semRespostaClienteAposResolvido: n1 ? resolvido && r.semRespostaCliente === true : cls === 'semResposta',
+    opCanceladaMotivo7Dias: n1 ? motivoContemCancelamento7Dias(r.motivoReduzido) : cls === 'opCancelada',
   };
 }
 
@@ -625,7 +634,7 @@ function initStatsRoutes(connectToMongo) {
         camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'createdAt' },
         campoMotivoFiltro: 'motivoReduzido',
         n1SemFiltroMotivoProduto: true,
-        statsRoute: 'v1.20.0',
+        statsRoute: 'v1.21.0',
         statsTz: STATS_DATE_ZONE,
         dataInicio: dataInicioRaw,
         dataFim: dataFimRaw || '(hoje)',
@@ -644,7 +653,7 @@ function initStatsRoutes(connectToMongo) {
         db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
       ]);
 
-      console.log('[GET /api/stats] stats v1.20.0 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
+      console.log('[GET /api/stats] stats v1.21.0 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
 
       const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
 
@@ -658,15 +667,15 @@ function initStatsRoutes(connectToMongo) {
       };
 
       const pixLiberadoPorTipo = {
-        bacen: bacen.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
-        n2: n2Pix.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
-        ra: reclameAquiDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
-        procon: proconDocs.filter((r) => documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)).length,
+        bacen: bacen.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
+        n2: n2Pix.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
+        ra: reclameAquiDocs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
+        procon: proconDocs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
         n1: n1Docs.filter((r) => documentoEscaladoN2ContagemN1(r)).length,
         total: todas.filter((r) => (
           isDocN1Stats(r)
             ? documentoEscaladoN2ContagemN1(r)
-            : documentoELiberacaoChavePixExclusivo(r) && documentoLiberadoChavePixParaMetricas(r)
+            : classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado'
         )).length,
       };
       console.log('[STATS_RESULT]', JSON.stringify({
@@ -1076,3 +1085,4 @@ module.exports.calcularStatsPorTipo = calcularStatsPorTipo;
 module.exports.calcularStatsCardN1 = calcularStatsCardN1;
 module.exports.enrichComMostradoresOuvidoria = enrichComMostradoresOuvidoria;
 module.exports.auditoriaPainelPredicatesPorDoc = auditoriaPainelPredicatesPorDoc;
+module.exports.classificacaoDesdobramentoOuvidoriaNaoN1 = classificacaoDesdobramentoOuvidoriaNaoN1;

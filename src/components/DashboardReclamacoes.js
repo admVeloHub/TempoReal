@@ -1,10 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.5.8
+ * VERSION: v2.6.0
  *
  * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
  * N1: Ocorrências = todos os docs da collection N1 no período (API ignora produto/motivo da UI). % Retenção = pixRetido/ocorrencias. Escalado N2 (pixLiberado) = escalar_chamado Ouvidoria | Devolutiva | -; Retidos / Em Aberto como stats.
- * Bacen, RA, Procon e N2: Sem Resposta, Op. Cancelada, Em Aberto.
+ * Bacen, RA, Procon e N2 (stats v1.21.0): Liberados, Retidos, Sem resposta, Op. cancelada e Em aberto são classes excludentes por documento (soma ≤ ocorrências; “Liberado” só com caso resolvido).
  * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
  * % Retenção em cada card (incl. N1): retidos ÷ ocorrências (solLiberacao) só com dados daquele canal. Painel adm: agregado sem N1. Paleta LAYOUT_GUIDELINES.
  */

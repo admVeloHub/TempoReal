@@ -2,6 +2,26 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-04-10  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.21.0 / `listN2RetidosCpfs.js` v1.3.3 / `relatorioAdministrativoN2Pix.js` v1.2.2 / `DashboardReclamacoes.js` v2.6.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.21.0 — `classificacaoDesdobramentoOuvidoriaNaoN1`: desdobramento excludente (Em aberto → Sem resposta → Op. cancelada → Liberado/Retido em Lib. Chave Pix); Liberado só se resolvido; enrich e `calcularStatsPorTipo` alinhados; export da classificação; `auditoriaPainelPredicatesPorDoc` e log `pixLiberadoPorTipo` idem
+- `backend/scripts/listN2RetidosCpfs.js` v1.3.3 — retido = classificação stats; remove helper duplicado não usado
+- `backend/scripts/relatorioAdministrativoN2Pix.js` v1.2.2 — métricas N2 espelham stats v1.21.0
+- `src/components/DashboardReclamacoes.js` v2.6.0 — comentário do painel alinhado à exclusividade dos mostradores
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Corrige sobreposição entre Liberados, Retidos, Sem resposta, Op. cancelada e Em aberto nos cards ouvidoria; soma dos desdobramentos não supera `ocorrências`. Script de auditoria de CPFs retidos N2 permanece alinhado ao painel.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-07  
 **Tipo:** Push GitHub  
 **Versão:** `backend/routes/stats.js` v1.20.5 / `listN2RetidosCpfs.js` v1.3.2 / `relatorioAdministrativoN2Pix.js` v1.2.1  

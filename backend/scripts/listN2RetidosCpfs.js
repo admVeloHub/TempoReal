@@ -1,12 +1,13 @@
 /**
  * Lista CPFs dos casos N2 (reclamacoes_n2Pix) contados como "Retidos" no card/métricas
  * do Dashboard — mesma lógica que stats.js calcularStatsPorTipo (somaRetidos).
- * VERSION: v1.3.2
+ * VERSION: v1.3.3
  * v1.1.0: tabela CPF + Finalizado.dataResolucao + pixLiberado (fuso STATS_TZ).
  * v1.2.0: exclusão opcional grupo API Outros.
  * v1.3.0: exclusão grupo API Outros (literais).
  * v1.3.1: "Antecipação" = Outros Anos (produto); grupo 2026 só dois literais — MOTIVO_PARAM alinhado a stats.
  * v1.3.2: retido ouvidoria não conta se semRespostaCliente === true (stats.js v1.20.5).
+ * v1.3.3: retido = classificação excludente stats v1.21.0 (incl. op. cancelada).
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/listN2RetidosCpfs.js
@@ -26,6 +27,7 @@ const {
   motivoN1ContaComoLiberacaoParaMetricas,
   expandMotivoLiberacaoChavePixParaMongoIn,
 } = require('../services/octadeskIngestService');
+const { classificacaoDesdobramentoOuvidoriaNaoN1 } = require('../routes/stats');
 
 const DB = 'hub_ouvidoria';
 const COLL_N2 = 'reclamacoes_n2Pix';
@@ -115,27 +117,10 @@ function documentoResolvidoParaMetricas(r) {
   return r.Finalizado != null && r.Finalizado.Resolvido === true;
 }
 
-function documentoLiberadoChavePixParaMetricas(r) {
-  if (r == null) return false;
-  if (isDocN1Stats(r)) {
-    return r.retido_no_atendimento === false;
-  }
-  if (typeof r.retido_no_atendimento === 'boolean') {
-    return r.retido_no_atendimento === false;
-  }
-  if (typeof r.pixLiberado === 'boolean') {
-    return r.pixLiberado === true;
-  }
-  return false;
-}
-
-/** Igual somaRetidos em calcularStatsPorTipo (stats.js). */
+/** Igual somaRetidos em calcularStatsPorTipo (stats.js v1.21.0 — classes excludentes). */
 function documentoContaComoRetidoPorTipoOuvidoria(r) {
   if (isDocN1Stats(r) && documentoRetidoContagemN1(r)) return true;
-  if (!documentoELiberacaoChavePixExclusivo(r)) return false;
-  if (isDocN1Stats(r)) return false;
-  if (r.semRespostaCliente === true) return false;
-  return documentoResolvidoParaMetricas(r) && !documentoLiberadoChavePixParaMetricas(r);
+  return classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'retido';
 }
 
 const CAMPOS_DATA_POR_COLLECTION = {
@@ -297,7 +282,7 @@ async function main() {
   const wData = Math.max(10, 'dataResolucao (SP)'.length, ...linhasTabela.map((l) => l.dataResolucao.length));
   const wPix = Math.max('pixLiberado'.length, ...linhasTabela.map((l) => l.pixLiberado.length));
 
-  console.log('[listN2RetidosCpfs] Critério: stats.js calcularStatsPorTipo → somaRetidos (Liberação Chave Pix + resolvido + não liberado + semRespostaCliente≠true; ou N1-stats com retido_no_atendimento).');
+  console.log('[listN2RetidosCpfs] Critério: stats v1.21.0 → classificacaoDesdobramentoOuvidoriaNaoN1 === retido (excludente; ou N1 retido_no_atendimento).');
   console.log('[listN2RetidosCpfs] Collection:', `${DB}.${COLL_N2}`);
   console.log('[listN2RetidosCpfs] Fuso:', STATS_DATE_ZONE);
   console.log('[listN2RetidosCpfs] Intervalo dataEntradaN2:', dataInicio.toISOString(), '—', dataFim.toISOString());
