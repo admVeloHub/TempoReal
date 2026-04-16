@@ -1,12 +1,10 @@
 /**
  * Painel Reclamações Tempo Real - DashboardReclamacoes
- * VERSION: v2.6.0
+ * VERSION: v2.7.0
  *
- * Cards por canal: valores diretos de porTipo (N1, RA, Bacen, Procon, N2).
- * N1: Ocorrências = todos os docs da collection N1 no período (API ignora produto/motivo da UI). % Retenção = pixRetido/ocorrencias. Escalado N2 (pixLiberado) = escalar_chamado Ouvidoria | Devolutiva | -; Retidos / Em Aberto como stats.
- * Bacen, RA, Procon e N2 (stats v1.21.0): Liberados, Retidos, Sem resposta, Op. cancelada e Em aberto são classes excludentes por documento (soma ≤ ocorrências; “Liberado” só com caso resolvido).
- * Painel executivo (adm): Ocorrências, Liberados, Retidos, % Retenção e Taxa de Resolução = Total menos N1 (mesma base em todos os mostradores daquele bloco).
- * % Retenção em cada card (incl. N1): retidos ÷ ocorrências (solLiberacao) só com dados daquele canal. Painel adm: agregado sem N1. Paleta LAYOUT_GUIDELINES.
+ * Cards por canal: valores diretos de porTipo (N1 = Time Portabilidade na API, RA, Bacen, Procon, N2).
+ * Todos os cards (stats v1.21.3+): Liberados, Retidos, Sem resposta, Op. cancelada e Em aberto — classes excludentes; % Retenção = retidos ÷ solLiberacao por canal.
+ * Painel executivo (adm): mesmos agregados de porTipo.Total (inclui Time Portabilidade). Paleta LAYOUT_GUIDELINES.
  */
 
 import React from 'react';
@@ -27,14 +25,14 @@ const CORES = {
 
 const BASE_ICONS = process.env.PUBLIC_URL || '';
 const CANAIS = [
-  { key: 'N1', label: 'N1', iconSrc: `${BASE_ICONS}/icon N1.png`, cor: CORES.blueLight },
+  { key: 'N1', label: 'Time Portabilidade', iconSrc: `${BASE_ICONS}/icon N1.png`, cor: CORES.blueLight },
   { key: 'Reclame Aqui', label: 'RA', iconSrc: `${BASE_ICONS}/icon RA.png`, cor: CORES.green },
   { key: 'Bacen', label: 'Bacen', iconSrc: `${BASE_ICONS}/icon bacen.png`, cor: CORES.blueOpaque },
   { key: 'Procon', label: 'Procon', iconSrc: `${BASE_ICONS}/icon procon.png`, cor: CORES.yellow },
   { key: 'N2', label: 'N2', iconSrc: `${BASE_ICONS}/icon n2.png`, cor: CORES.blueMedium },
 ];
 
-/** % Retenção: retidos ÷ base (solLiberacao ou ocorrencias conforme o card), 1 decimal. */
+/** % Retenção: retidos ÷ solLiberacao (1 decimal). */
 function percRetencaoSobreOcorrencias(retidos, ocorrenciasSolLiberacao) {
   const o = Number(ocorrenciasSolLiberacao) || 0;
   const r = Number(retidos) || 0;
@@ -104,20 +102,14 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
   const getDados = (key) => porTipo[key] || {};
 
   const total = porTipo.Total || {};
-  const n1 = getDados('N1');
-  const n1Sol = Number(n1.solLiberacao) || 0;
-  const n1PixL = Number(n1.pixLiberado) || 0;
-  const n1PixR = Number(n1.pixRetido) || 0;
-  const n1Res = Number(n1.resolvido) || 0;
-  const n1Occ = Number(n1.ocorrencias) || 0;
 
-  const ocorrenciasPainelExecutivo = Math.max(0, (Number(total.solLiberacao) || 0) - n1Sol);
-  const liberadosPainelExecutivo = Math.max(0, (Number(total.pixLiberado) || 0) - n1PixL);
-  const retidosPainelExecutivo = Math.max(0, (Number(total.pixRetido) || 0) - n1PixR);
+  const ocorrenciasPainelExecutivo = Number(total.solLiberacao) || 0;
+  const liberadosPainelExecutivo = Number(total.pixLiberado) || 0;
+  const retidosPainelExecutivo = Number(total.pixRetido) || 0;
   const percTotalRetencao = percRetencaoSobreOcorrencias(retidosPainelExecutivo, ocorrenciasPainelExecutivo);
 
-  const ocorrenciasDocsExecutivo = Math.max(0, (Number(total.ocorrencias) || 0) - n1Occ);
-  const resolvidoExecutivo = Math.max(0, (Number(total.resolvido) || 0) - n1Res);
+  const ocorrenciasDocsExecutivo = Number(total.ocorrencias) || 0;
+  const resolvidoExecutivo = Number(total.resolvido) || 0;
   const taxaResolucaoExecutivo = taxaResolucaoLiteral(resolvidoExecutivo, ocorrenciasDocsExecutivo);
   const hexToRgba = (hex, alpha = 0.20) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -212,7 +204,7 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
       <section className="shrink-0 grid grid-cols-5 gap-3 min-w-0 overflow-x-auto mt-4">
         {CANAIS.map((canal, idx) => {
           const dados = getDados(canal.key);
-          const baseRetencao = canal.key === 'N1' ? dados.ocorrencias : dados.solLiberacao;
+          const baseRetencao = dados.solLiberacao;
           const percRetCard = percRetencaoSobreOcorrencias(dados.pixRetido, baseRetencao);
           const bgRgba = hexToRgba(canal.cor);
           return (
@@ -237,35 +229,25 @@ const DashboardReclamacoes = ({ stats, loading, activeTab = 'pix-tempo-real', fi
                     <span className="text-lg font-bold" style={{ color: CORES.blueDark }}>{dados.ocorrencias ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center gap-2 min-h-0">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">{canal.key === 'N1' ? 'Escalado N2' : 'Liberados'}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Liberados</span>
                     <span className="text-base font-semibold" style={{ color: '#c0392b' }}>{dados.pixLiberado ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center gap-2 min-h-0">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Retidos</span>
                     <span className="text-base font-semibold" style={{ color: CORES.green }}>{dados.pixRetido ?? 0}</span>
                   </div>
-                  {canal.key === 'N1' && (
-                    <div className="flex justify-between items-center gap-2 min-h-0">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">Em Aberto</span>
-                      <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.emAberto ?? 0}</span>
-                    </div>
-                  )}
-                  {canal.key !== 'N1' && (
-                    <>
-                      <div className="flex justify-between items-center gap-2 min-h-0">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Sem Resposta</span>
-                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.semResposta ?? 0}</span>
-                      </div>
-                      <div className="flex justify-between items-center gap-2 min-h-0">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Op. Cancelada</span>
-                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.opCancelada ?? 0}</span>
-                      </div>
-                      <div className="flex justify-between items-center gap-2 min-h-0">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Em Aberto</span>
-                        <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.emAberto ?? 0}</span>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex justify-between items-center gap-2 min-h-0">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Sem Resposta</span>
+                    <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.semResposta ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-2 min-h-0">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Op. Cancelada</span>
+                    <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.opCancelada ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-2 min-h-0">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Em Aberto</span>
+                    <span className="text-base font-semibold" style={{ color: CORES.blueDark }}>{dados.emAberto ?? 0}</span>
+                  </div>
                 </div>
                 <div
                   className="flex items-center justify-between gap-2 w-full min-w-0 pt-1 border-t shrink-0"

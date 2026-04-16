@@ -5,7 +5,22 @@
  * uuid v13+ é ESM: usa dynamic import.
  */
 
-require('dotenv').config();
+
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
 
 const mongoConnectionUri = process.env.MONGO_ENV;
 const SESSION_EXPIRATION_MS = 4 * 60 * 60 * 1000; // 4 horas

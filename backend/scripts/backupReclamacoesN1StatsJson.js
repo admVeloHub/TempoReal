@@ -1,6 +1,22 @@
 /**
  * Exporta hub_ouvidoria.reclamações_n1Stats para JSON (Extended JSON relaxado, BSON).
  * VERSION: v1.0.0
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
+
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/backupReclamacoesN1StatsJson.js
@@ -8,7 +24,6 @@
  * Arquivo: backend/backups/reclamacoes_n1Stats_<timestamp>.json
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const fs = require('fs');
 const path = require('path');

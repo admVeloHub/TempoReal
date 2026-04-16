@@ -1,14 +1,16 @@
 /**
  * Auditoria dos cards do Dashboard — mesmo pipeline que GET /api/stats (find + porTipo).
- * VERSION: v1.0.0
+ * VERSION: v1.1.0
+ *
+ * v1.1.0: porTipo.N1 = reclamacoes_timePortabilidade (dataEntrada + produto/motivo), alinhado a stats.js v1.21.3.
  *
  * Gera backend/reports/auditoria_cards_stats_<timestamp>.txt com contagens por canal
- * (N1, N2, Reclame Aqui, Bacen, Procon, Total) para conferir com o painel.
+ * (N1/Time Portabilidade, N2, Reclame Aqui, Bacen, Procon, Total) para conferir com o painel.
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/auditoriaCardsStats.js
  *
- * Filtros (igual semântica da rota; N1 ignora produto/motivo):
+ * Filtros (igual semântica da rota; Time Portabilidade usa produto/motivo como as outras ouvidorias):
  *   DATA_INICIO=2026-01-01  DATA_FIM=2026-04-07  (opcional; padrão = stats)
  *   FILTRO_VAZIO=1  — sem filtro produto/motivo nas ouvidorias (só período)
  *   PRODUTO=a,b     — CSV para $in produto (se definido e não FILTRO_VAZIO)
@@ -17,13 +19,26 @@
  * Se PRODUTO/MOTIVO omitidos e não FILTRO_VAZIO: padrão App — [Antecipação - 2026, Antecipação 2026] + Liberação chave pix.
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
 
 const fs = require('fs');
 const path = require('path');
 const { DateTime } = require('luxon');
 const { MongoClient } = require('mongodb');
-const { N1_STATS_COLLECTION } = require('../services/octadeskIngestService');
 const statsRoute = require('../routes/stats');
 
 const DB = 'hub_ouvidoria';
@@ -34,6 +49,7 @@ const COLLECTIONS = {
   n2: 'reclamacoes_n2Pix',
   ra: 'reclamacoes_reclameAqui',
   procon: 'reclamacoes_procon',
+  timePortabilidade: 'reclamacoes_timePortabilidade',
 };
 
 function parseCsvEnv(name) {
@@ -67,8 +83,8 @@ function fmtLinhaCard(label, stats) {
   return [
     label,
     `  ocorrencias:  ${s.ocorrencias ?? 0}`,
-    `  solLiberacao: ${s.solLiberacao ?? 0} (universo Liberação Chave Pix — N1 usa ocorrencias)`,
-    `  Liberados:    ${s.pixLiberado ?? 0}  (N1: Escalado N2)`,
+    `  solLiberacao: ${s.solLiberacao ?? 0} (universo Liberação Chave Pix)`,
+    `  Liberados:    ${s.pixLiberado ?? 0}`,
     `  Retidos:      ${s.pixRetido ?? 0}`,
     `  % Retenção:   ${s.percRetencao ?? 0}`,
     `  Taxa resol.:  ${s.taxaResolucao ?? 0}`,
@@ -100,30 +116,33 @@ async function main() {
   const filtroDataN2 = statsRoute.criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
   const filtroDataRA = statsRoute.criarFiltroDataPorCollection('reclamacoes_reclameAqui', dataInicio, dataFim);
   const filtroDataProcon = statsRoute.criarFiltroDataPorCollection('reclamacoes_procon', dataInicio, dataFim);
-  const filtroDataN1 = statsRoute.criarFiltroPeriodoN1PorCreatedAt(dataInicio, dataFim);
+  const filtroDataTimePort = statsRoute.criarFiltroDataPorCollection('reclamacoes_timePortabilidade', dataInicio, dataFim);
 
   const filtroBacen = statsRoute.mesclarFiltros(filtroDataBacen, filtroProduto, filtroMotivo);
   const filtroN2 = statsRoute.mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
   const filtroRA = statsRoute.mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
   const filtroProcon = statsRoute.mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
-  const filtroN1 = { ...filtroDataN1 };
+  const filtroTimePortabilidade = statsRoute.mesclarFiltros(filtroDataTimePort, filtroProduto, filtroMotivo);
 
   const client = new MongoClient(uri);
   await client.connect();
   const db = client.db(DB);
 
-  const [bacen, n2Pix, reclameAquiDocs, proconDocs, n1Docs] = await Promise.all([
+  const [bacen, n2Pix, reclameAquiDocs, proconDocs, timePortabilidadeDocs] = await Promise.all([
     db.collection(COLLECTIONS.bacen).find(filtroBacen).toArray(),
     db.collection(COLLECTIONS.n2).find(filtroN2).toArray(),
     db.collection(COLLECTIONS.ra).find(filtroRA).toArray(),
     db.collection(COLLECTIONS.procon).find(filtroProcon).toArray(),
-    db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
+    db.collection(COLLECTIONS.timePortabilidade).find(filtroTimePortabilidade).toArray(),
   ]);
 
-  const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
+  const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...timePortabilidadeDocs];
 
   const porTipo = {
-    N1: statsRoute.calcularStatsCardN1(n1Docs),
+    N1: statsRoute.enrichComMostradoresOuvidoria(
+      statsRoute.calcularStatsPorTipo(timePortabilidadeDocs),
+      timePortabilidadeDocs
+    ),
     N2: statsRoute.enrichComMostradoresOuvidoria(statsRoute.calcularStatsPorTipo(n2Pix), n2Pix),
     'Reclame Aqui': statsRoute.enrichComMostradoresOuvidoria(
       statsRoute.calcularStatsPorTipo(reclameAquiDocs),
@@ -143,7 +162,7 @@ async function main() {
     'AUDITORIA CARDS — pipeline idêntico GET /api/stats (porTipo)',
     '============================================================',
     `Gerado: ${agora.toFormat('yyyy-MM-dd HH:mm:ss')} (${STATS_DATE_ZONE})`,
-    'Script: backend/scripts/auditoriaCardsStats.js v1.0.0',
+    'Script: backend/scripts/auditoriaCardsStats.js v1.1.0',
     '',
     'FILTROS',
     '-------',
@@ -153,7 +172,7 @@ async function main() {
     `Intervalo aplicado dataFim JS:    ${dataFim?.toISOString?.()}`,
     `produtos (ouvidoria): ${JSON.stringify(produtos)}`,
     `motivos:               ${JSON.stringify(motivos)}`,
-    'N1: apenas período em createdAt (produto/motivo ignorados, como na rota).',
+    'porTipo.N1 (Time Portabilidade): dataEntrada + produto + motivo (como na rota stats v1.21.3).',
     '',
     'DOCUMENTOS RETORNADOS PELO find (por coleção)',
     '----------------------------------------------',
@@ -161,12 +180,12 @@ async function main() {
     `reclamacoes_n2Pix:        ${n2Pix.length}`,
     `reclamacoes_reclameAqui:  ${reclameAquiDocs.length}`,
     `reclamacoes_procon:       ${proconDocs.length}`,
-    `${N1_STATS_COLLECTION}: ${n1Docs.length}`,
+    `${COLLECTIONS.timePortabilidade}: ${timePortabilidadeDocs.length}`,
     `soma (Total.ocorrencias): ${todas.length}`,
     '',
     'MÉTRICAS POR CARD (porTipo)',
     '---------------------------',
-    fmtLinhaCard('--- N1 ---', porTipo.N1),
+    fmtLinhaCard('--- N1 (Time Portabilidade) ---', porTipo.N1),
     '',
     fmtLinhaCard('--- N2 ---', porTipo.N2),
     '',
@@ -194,7 +213,7 @@ async function main() {
     n2: n2Pix.length,
     ra: reclameAquiDocs.length,
     procon: proconDocs.length,
-    n1: n1Docs.length,
+    timePortabilidade: timePortabilidadeDocs.length,
     total: todas.length,
   });
 

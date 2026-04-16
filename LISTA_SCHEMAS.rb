@@ -1,5 +1,8 @@
 listagem de schema de coleções do mongoDB
-  <!-- VERSION: v4.16.20 | DATE: 2026-04-08 | AUTHOR: VeloHub Development Team -->
+  <!-- VERSION: v4.17.1 | DATE: 2026-04-16 | AUTHOR: VeloHub Development Team -->
+  <!-- CHANGELOG: v4.17.1 - hub_ouvidoria.reclamacoes_timePortabilidade (Painel GET /api/stats porTipo.N1) -->
+  <!-- CHANGELOG: v4.17.0 - Consolidação: base Painel v4.16.20 + academy_registros.quiz_conteudo + qualidade_avaliacoes.avaliacaoIA/somenteAnaliseAudioIA (root - Console v4.15.0) -->
+  <!-- FONTE DA VERDADE - Versão única e definitiva -->
  
     🗄️ Database: console_conteudo
    
@@ -280,6 +283,8 @@ listagem de schema de coleções do mongoDB
   procedimentoIncorreto: Boolean, // Critério de avaliação
   encerramentoBrusco: Boolean,    // Critério de avaliação
   pontuacaoTotal: Number,         // Pontuação total
+  avaliacaoIA: Number,            // Nota IA espelhada de audio_analise_results ao concluir análise (só worker/backend)
+  somenteAnaliseAudioIA: Boolean, // true = fluxo lote/só áudio; manual do supervisor ainda não aplicado
   observacoes: String,            // Observações da avaliação
   dataLigacao: Date,              // Data da ligação
   nomeArquivoAudio: String,       // Nome do arquivo de áudio
@@ -309,7 +314,7 @@ listagem de schema de coleções do mongoDB
     Sociais: Boolean,             // Acesso ao módulo Sociais (requer Velohub === true)
     Academy: Boolean,             // Acesso ao Academy
     Desk: Boolean,                // Acesso ao Desk
-    realTime: Boolean             // Acesso ao módulo Tempo Real (rótulo no produto: “Tempo Real”; mesmo campo nas rotas POST/PUT /api/qualidade/funcionarios)
+    realTime: Boolean,            // Acesso ao módulo Tempo Real (rótulo no produto: “Tempo Real”; mesmo campo nas rotas POST/PUT /api/qualidade/funcionarios)
     apoioN1: Boolean              // Credencial Apoio N1 (rótulo no produto: “Apoio N1”; POST/PUT /api/qualidade/funcionarios; formato legado array: sistema normalizado “apoion1”)
   },
   desligado: Boolean,             // Se foi desligado
@@ -421,6 +426,27 @@ listagem de schema de coleções do mongoDB
   // Chave única (índice composto): userEmail + subtitle
   // Permite múltiplos registros por usuário (um por subtítulo)
 
+  //schema academy_registros.quiz_conteudo
+  // Um documento por quiz; quizID deve coincidir com quizId em cursos_conteudo (obrigatoriamente igual ao temaNome da seção em snake_case). Em cada item de questões, opção1 é a correta.
+  {
+  _id: ObjectId,
+  quizID: String,              // = temaNome da seção em snake_case (ex.: "Seja Bem Vindo" → seja_bem_vindo)
+  questões: [
+    {
+      pergunta: String,      // enunciado
+      opção1: String,        // opção correta (convenção)
+      opção2: String,
+      opção3: String,        // vazio em V/F (só opção1–2); pode ter texto com opção4 vazia (3 alternativas)
+      opção4: String         // vazio em V/F ou em pergunta de 3 alternativas
+    }
+  ],
+  notaCorte: Number,         // mínimo de acertos (inteiro), 0 .. questões.length
+  createdAt: Date,
+  updatedAt: Date
+  }
+  // Índice: { quizID: 1 } unique (recomendado; fallback não-unique se existirem duplicados legados)
+
+
   //schema academy_registros.cursos_conteudo
   // Estrutura normalizada (4 coleções: cursos, modulos, secoes, aulas)
   {
@@ -440,7 +466,7 @@ listagem de schema de coleções do mongoDB
           temaOrder: Number,
           isActive: Boolean,
           hasQuiz: Boolean,     // Se tem quiz associado
-          quizId: String,       // ID do quiz (se houver)
+          quizId: String,       // Obrigatoriamente = temaNome desta seção em snake_case (mesmo valor que quizID em quiz_conteudo)
           lessons: [
             {
               lessonId: String,      // "l1-1"
@@ -806,6 +832,38 @@ listagem de schema de coleções do mongoDB
   // - telefones.lista: 1 (índice para buscas em telefones)
   // - email: 1 (índice esparso para buscas por email)
   // - createdAt: -1 (índice para ordenação)
+  
+  //schema hub_ouvidoria.reclamacoes_timePortabilidade (Time Portabilidade; painel porTipo.N1 — stats v1.21.3: dataEntrada + produto/motivo)
+  {
+  _id: ObjectId,
+  nome: String,
+  cpf: String,
+  telefones: { lista: [String] },
+  email: String,
+  observacoes: String,
+  responsavel: String,
+  createdAt: Date,
+  updatedAt: Date,
+  dataEntrada: Date,                // Filtro de período no GET /api/stats
+  origem: String,
+  produto: String,
+  motivoReduzido: [String],
+  motivoDetalhado: String,
+  protocoloOctadesk: String,
+  pixLiberado: Boolean,
+  statusContratoQuitado: Boolean,
+  statusContratoAberto: Boolean,
+  tentativasContato: { lista: [String] },
+  semRespostaCliente: Boolean,      // Opcional; métricas excludentes (ouvidoria)
+  retido_no_atendimento: Boolean,   // Opcional; liberado/retido com Finalizado (stats.js)
+  Finalizado: { Resolvido: Boolean, dataResolucao: Date },
+  userEmail: String                 // Opcional
+  }
+  
+  // Índices MongoDB sugeridos:
+  // - dataEntrada (filtro stats)
+  // - produto, motivoReduzido (filtros UI)
+  // - createdAt: -1
   
   //schema hub_ouvidoria.reclamacoes_n1Stats (Octadesk webhook N1) — LISTA v4.16.20: motivoReduzido String; produto fixo Antecipação - 2026; sem motivos_chave_pix/libera_o_chave_pix/pixLiberado no documento
   {

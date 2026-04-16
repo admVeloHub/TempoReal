@@ -8,6 +8,22 @@
  * v1.3.1: "Antecipação" = Outros Anos (produto); grupo 2026 só dois literais — MOTIVO_PARAM alinhado a stats.
  * v1.3.2: retido ouvidoria não conta se semRespostaCliente === true (stats.js v1.20.5).
  * v1.3.3: retido = classificação excludente stats v1.21.0 (incl. op. cancelada).
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
+
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/listN2RetidosCpfs.js
@@ -18,7 +34,6 @@
  *   INCLUIR_OUTROS_ANOS=1  — inclui retidos com produto do grupo API Outros (rótulos no header v1.3); padrão: excluídos
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { DateTime } = require('luxon');
 const { MongoClient } = require('mongodb');

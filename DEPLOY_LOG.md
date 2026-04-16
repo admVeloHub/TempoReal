@@ -2,6 +2,34 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-04-16 18:48  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.21.7 / `src/App.js` v1.4.13 / `src/components/AbaTabelaLiberacao.js` v1.2.1 / `src/services/api.js` v1.4.15 / `backend/services/relatorioOuvidoriaBaseExcel.js` v1.0.2 / `LISTA_SCHEMAS.rb` v4.17.1  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.21.7 — `GET /api/stats/tabela-liberacao`, export tabela Excel, `GET /api/stats/relatorio-ouvidoria-base` (base 5 abas + Time Portabilidade); JSON com totais por card
+- `backend/services/relatorioOuvidoriaBaseExcel.js` v1.0.2 — geração Excel da base; correção `DateTime` (Luxon) em `dataReferenciaLuxon`
+- `src/App.js` v1.4.13 — aba Conciliação (visibilidade restrita); engrenagem de filtros globais; layout da aba
+- `src/components/AbaTabelaLiberacao.js` v1.2.1 — tabela Card / Total / dias, expansão ocorrências e liberados; exports tabela e base; período só para download da base; altura sem scroll interno cortando linhas
+- `src/services/api.js` v1.4.15 — `fetchStatsTabelaLiberacao`, `downloadConciliacaoTabelaExcel`, `downloadRelatorioOuvidoriaBaseExcel`
+- `src/components/DashboardReclamacoes.js` — ajustes correlatos ao painel
+- `backend/scripts/relatorioOuvidoria4AbasTotaisExcel.js` — script CLI; nota sobre export web com 5 abas
+- `backend/scripts/` — novos e alterados: `backupAuditoriaReclamacoesN2Pix.js`, `extrairSeparado2026BackupN2Pix.js`, `relatorioLiberadosAntecipacao2026Excel.js`; demais scripts (auditoria, backup, diagnose, ingest, listagens, N1/N2, normalize, reset, relatório administrativo N2)
+- `backend/server.js`, `backend/services/userSessionLogger.js` — alterações de suporte
+- `backend/package.json` / `backend/package-lock.json` — dependências
+- `LISTA_SCHEMAS.rb` v4.17.1 — `reclamacoes_timePortabilidade` (Painel)
+- Remoção de `.env.example` na raiz e em `backend/` (arquivos de exemplo de ambiente)
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Entrega da aba Conciliação no painel (tabela alinhada aos filtros globais, export Excel da visão e download da base ouvidoria com aba Time Portabilidade), endpoints em `stats` e serviço de Excel da base; correção do erro 500 no export da base (Luxon). Inclui atualização de schema listagem, scripts operacionais e ajustes de backend.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-10  
 **Tipo:** Push GitHub  
 **Versão:** `backend/routes/stats.js` v1.21.0 / `listN2RetidosCpfs.js` v1.3.3 / `relatorioAdministrativoN2Pix.js` v1.2.2 / `DashboardReclamacoes.js` v2.6.0  

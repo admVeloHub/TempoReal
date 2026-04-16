@@ -1,11 +1,26 @@
 /**
  * Painel Reclamações Tempo Real - Backend
- * VERSION: v1.4.10
+ * VERSION: v1.4.12
  *
  * Servidor Express com auth, GET /api/stats; rotas Octadesk (POST webhook N1, logs, supervisão).
  */
 
-require('dotenv').config();
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
+
 const express = require('express');
 const cors = require('cors');
 const { MongoClient } = require('mongodb');
@@ -90,7 +105,7 @@ const startServer = () => {
       `Painel Reclamações Backend porta ${PORT} | Octadesk ingest ${INGEST_SERVICE_VERSION} | webhook N1 ${
         whSecretOk
           ? 'protegido (OCTADESK_WEBHOOK_SECRET: header ou ?octadesk_webhook_key=)'
-          : 'sem autenticação no webhook — arriscado; prefira segredo + URL com query (ver .env.example)'
+          : 'sem autenticação no webhook — arriscado; prefira segredo + URL com query (ver FONTE DA VERDADE/.env)'
       }`
     );
     if (mongoConnectionUri) {

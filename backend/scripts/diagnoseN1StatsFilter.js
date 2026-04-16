@@ -1,12 +1,27 @@
 /**
  * Diagnóstico: hub_ouvidoria.reclamações_n1Stats vs filtro N1 do GET /api/stats.
  * VERSION: v1.3.1
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
+
  *
  * Uso (pasta backend, .env com MONGO_ENV):
  *   node scripts/diagnoseN1StatsFilter.js
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { DateTime } = require('luxon');
 const { MongoClient } = require('mongodb');

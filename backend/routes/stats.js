@@ -1,42 +1,48 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.21.0
+ * VERSION: v1.21.7
+ * v1.21.7: GET /api/stats/tabela-liberacao/export (Excel visão tabela), GET /api/stats/relatorio-ouvidoria-base (5 abas + timePortabilidade); tabela JSON com totais por card.
+ * v1.21.6: GET /api/stats/tabela-liberacao — segundo eixo por dia = liberados (pixLiberado / Escalado N2), não retidos.
+ * v1.21.5: GET /api/stats/tabela-liberacao — por canal/dia: ocorrências (Liberação Chave Pix) e retirados (regras do painel); mesmos filtros que GET /.
+ * v1.21.4: filtro de período por dia ISO literal em UTC (horário ignorado) para GET /api/stats e rotas auxiliares (/ra, /bacen, /procon, /n2, /judicial).
+ * v1.21.3: card porTipo.N1 alimentado por hub_ouvidoria.reclamacoes_timePortabilidade (dataEntrada + produto/motivo; calcularStatsPorTipo + enrich); Total inclui Time Portabilidade; Octadesk n1Stats só em scripts/ingest.
  * v1.20.1: exports de helpers de filtro para scripts (relatório N2 = mesmo predicado Mongo do GET /).
  * v1.20.2: produto literal "Antecipação" alinhado a Outros Anos; MOTIVO_PARAM idem.
  * v1.20.3: exports calcularStatsPorTipo, calcularStatsCardN1, enrichComMostradoresOuvidoria (auditoria cards = GET /).
  * v1.20.4: auditoriaPainelPredicatesPorDoc (scripts backup N2Pix / reconciliação com calcularStatsPorTipo).
  * v1.20.5: ouvidoria → pixRetido/somaRetidos exclui caso com semRespostaCliente === true (excludente com mostrador Sem resposta).
  * v1.21.0: ouvidoria não‑N1 — desdobramento excludente (classificacaoDesdobramentoOuvidoriaNaoN1): Em aberto → Sem resposta → Op. cancelada → Liberado/Retido (só Liberação Chave Pix); Liberado só se resolvido.
+ * v1.21.1: export documentoELiberacaoChavePixExclusivo para scripts de relatório (sem alteração de rotas).
+ * v1.21.2: export documentoResolvidoParaMetricas para scripts (Em aberto / Resolvido; sem alteração de rotas).
  *
- * porTipo: emAberto em todos os canais (calcularStatsPorTipo). N1 no card exibe Em Aberto; RA/Bacen/Procon/N2: semResposta/opCancelada/pixLiberado/pixRetido com a mesma exclusividade (soma dos desdobramentos ≤ ocorrências).
+ * porTipo: emAberto em todos os canais (calcularStatsPorTipo). Chave JSON N1 = Time Portabilidade (reclamacoes_timePortabilidade), mesmos mostradores excludentes que RA/Bacen/Procon/N2.
  *
- * GET /: dataInicio, dataFim (YYYY-MM-DD). Intervalo = início/fim do dia no fuso STATS_TZ (padrão America/Sao_Paulo), não meia-noite UTC. Default início 2026-01-01; fim omitido = fim do dia nesse fuso hoje.
+ * GET /: dataInicio, dataFim (YYYY-MM-DD). Intervalo = início/fim do dia ISO literal em UTC (00:00:00.000Z → 23:59:59.999Z), ignorando horário local. Default início 2026-01-01; fim omitido = fim do dia UTC hoje.
  *
  * Campos de data para filtro (LISTA_SCHEMAS.rb):
  * - Bacen: dataEntrada (não usar createdAt)
  * - N2: dataEntradaN2
  * - Reclame Aqui: dataReclam
  * - Procon: dataProcon
- * - N1 Octadesk (card): período só em createdAt (LISTA_SCHEMAS). Sem filtro produto/motivo da UI: reclamações_n1Stats já é só tickets N1 elegíveis ao ingest.
+ * - Time Portabilidade (porTipo.N1): dataEntrada + filtro produto/motivo (igual demais ouvidorias).
  *
  * motivoReduzido: sempre tratado como array. Padrão exato: "Liberação Chave Pix".
  * percRetencao: pixRetido / solLiberacao × 100 (ocorrências = universo Liberação Chave Pix); 0 se solLiberacao = 0. Ouvidoria (não-N1): pixLiberado/pixRetido e mostradores enrich seguem classificação excludente (v1.21.0).
- * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. N1: motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
- * N1 resolvido / taxa resolução (card): currentStatusName “Resolvido” (normalizeTextOctadesk), não só Finalizado.Resolvido.
- * N1 (card): Ocorrências = docs após filtro Mongo; Escalado N2 = escalar_chamado em {Casos Especiais - Ouvidoria, Devolutiva, -} (normalizeTextOctadesk); Retidos = retido_no_atendimento === true; Em Aberto = currentStatusName ≠ Resolvido (vazio = aberto). JSON mantém pixLiberado/pixRetido/solLiberacao para o Dashboard; N1 solLiberacao = ocorrencias do filtro.
- * Filtro produto ouvidoria (Bacen, N2, RA, Procon): campo produto.
- * Parâmetro motivo (UI): ouvidoria (Bacen, N2, RA, Procon) usa criarFiltroMotivoItemOuvidoria. N1 ignora produto e motivo no find — o card reflete todos os documentos da collection no período.
+ * solLiberacao / docsLiberacaoChavePix: Liberação Chave Pix. Docs com octadeskNumber (n1Stats): motivoN1ContaComoLiberacaoParaMetricas(motivoReduzido); outras: motivos_chave_pix se preenchido; senão detalhe_2026; senão motivoReduzido.
+ * Docs Octadesk em n1Stats (fora do GET /): resolução por currentStatusName “Resolvido”. Time Portabilidade e demais ouvidorias: Finalizado.Resolvido.
+ * Filtro produto ouvidoria (Bacen, N2, RA, Procon, Time Portabilidade): campo produto.
+ * Parâmetro motivo (UI): ouvidoria usa criarFiltroMotivoItemOuvidoria (inclui porTipo.N1 / Time Portabilidade).
  * emAberto ouvidoria: !Finalizado.Resolvido.
  */
 
 const express = require('express');
 const { DateTime } = require('luxon');
+const ExcelJS = require('exceljs');
 const router = express.Router();
 
-/** Calendário YYYY-MM-DD para filtros (padrão Brasil). Sobrescreva com STATS_TZ se necessário. */
+/** Mantido para compatibilidade de logs/config; filtro de stats usa dia ISO literal em UTC (v1.21.4). */
 const STATS_DATE_ZONE = process.env.STATS_TZ || 'America/Sao_Paulo';
 const {
-  N1_STATS_COLLECTION,
   motivoN1ContaComoLiberacaoParaMetricas,
   normalizeTextOctadesk,
   expandMotivoLiberacaoChavePixParaMongoIn,
@@ -104,13 +110,14 @@ const MOTIVO_PARAM_ALINHA_PRODUTO_OUVIDORIA = {
 const MOTIVO_UI_LIBERACAO_CHAVE_PIX = 'Liberação chave pix';
 
 /**
- * YYYY-MM-DD → início/fim de dia no fuso STATS_DATE_ZONE (Luxon). Mongo compara instantes em UTC corretamente.
+ * YYYY-MM-DD → início/fim do dia ISO literal em UTC.
+ * Regra de negócio: horário é irrelevante para stats; filtra pelo dia "de calendário" do campo Date.
  */
 function parseDataDiaLocalInicio(yyyyMmDd) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(yyyyMmDd ?? '').trim());
   if (!m) return null;
   const iso = `${m[1]}-${m[2]}-${m[3]}`;
-  const dt = DateTime.fromISO(iso, { zone: STATS_DATE_ZONE });
+  const dt = DateTime.fromISO(iso, { zone: 'utc' });
   if (!dt.isValid) return null;
   return dt.startOf('day').toJSDate();
 }
@@ -119,16 +126,16 @@ function parseDataDiaLocalFim(yyyyMmDd) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(yyyyMmDd ?? '').trim());
   if (!m) return null;
   const iso = `${m[1]}-${m[2]}-${m[3]}`;
-  const dt = DateTime.fromISO(iso, { zone: STATS_DATE_ZONE });
+  const dt = DateTime.fromISO(iso, { zone: 'utc' });
   if (!dt.isValid) return null;
   return dt.endOf('day').toJSDate();
 }
 
 function hojeFimDiaLocal() {
-  return DateTime.now().setZone(STATS_DATE_ZONE).endOf('day').toJSDate();
+  return DateTime.now().setZone('utc').endOf('day').toJSDate();
 }
 
-/** Rotas GET /api/stats: default início 2026-01-01; fim omitido = fim do dia no fuso STATS_DATE_ZONE. */
+/** Rotas GET /api/stats: default início 2026-01-01; fim omitido = fim do dia UTC (dia ISO literal). */
 function normalizarIntervaloDatasQueryStats(dataInicioRaw, dataFimRaw) {
   const defaultInicio = '2026-01-01';
   const inRaw = (dataInicioRaw && String(dataInicioRaw).trim()) || defaultInicio;
@@ -144,8 +151,8 @@ function normalizarIntervaloDatasQueryStats(dataInicioRaw, dataFimRaw) {
   }
 
   if (dataInicio.getTime() > dataFim.getTime()) {
-    const di = DateTime.fromJSDate(dataInicio, { zone: STATS_DATE_ZONE });
-    const df = DateTime.fromJSDate(dataFim, { zone: STATS_DATE_ZONE });
+    const di = DateTime.fromJSDate(dataInicio, { zone: 'utc' });
+    const df = DateTime.fromJSDate(dataFim, { zone: 'utc' });
     dataInicio = df.startOf('day').toJSDate();
     dataFim = di.endOf('day').toJSDate();
   }
@@ -227,6 +234,7 @@ const CAMPOS_DATA_POR_COLLECTION = {
   reclamacoes_procon: 'dataProcon',
   reclamacoes_judicial: 'dataEntrada',
   reclamacoes_n1Stats: 'createdAt',
+  reclamacoes_timePortabilidade: 'dataEntrada',
 };
 
 function criarFiltroDataPorCollection(collectionName, dataInicio, dataFim) {
@@ -284,7 +292,7 @@ function mesclarFiltros(filtroData, filtroProduto, filtroMotivo = {}) {
 }
 
 /**
- * motivoReduzido: String (Bacen, N1) ou [String] (RA, Procon, N2).
+ * motivoReduzido: String (Bacen) ou [String] (RA, Procon, N2, Time Portabilidade).
  * Usa $regex para funcionar em ambos os tipos.
  */
 function criarFiltroMotivoItemOuvidoria(m) {
@@ -578,7 +586,7 @@ function auditoriaPainelPredicatesPorDoc(r) {
 /**
  * GET /api/stats
  * Query params: dataInicio, dataFim, produto (array), motivo (array)
- * Defaults: dataInicio 2026-01-01, dataFim fim do dia em STATS_TZ. produto/motivo vazios: sem filtro nesse eixo nas ouvidorias. N1: só período em createdAt; ignora produto e motivo da query.
+ * Defaults: dataInicio 2026-01-01, dataFim fim do dia UTC. produto/motivo vazios: sem filtro nesse eixo nas ouvidorias. porTipo.N1 (Time Portabilidade): dataEntrada + produto + motivo.
  */
 function initStatsRoutes(connectToMongo) {
   router.get('/', async (req, res) => {
@@ -622,19 +630,25 @@ function initStatsRoutes(connectToMongo) {
       const filtroDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
       const filtroDataRA = criarFiltroDataPorCollection('reclamacoes_reclameAqui', dataInicio, dataFim);
       const filtroDataProcon = criarFiltroDataPorCollection('reclamacoes_procon', dataInicio, dataFim);
-      const filtroDataN1 = criarFiltroPeriodoN1PorCreatedAt(dataInicio, dataFim);
+      const filtroDataTimePort = criarFiltroDataPorCollection('reclamacoes_timePortabilidade', dataInicio, dataFim);
 
       const filtroBacen = mesclarFiltros(filtroDataBacen, filtroProduto, filtroMotivo);
       const filtroN2 = mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
       const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
       const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
-      const filtroN1 = { ...filtroDataN1 };
+      const filtroTimePortabilidade = mesclarFiltros(filtroDataTimePort, filtroProduto, filtroMotivo);
 
       console.log('[STATS_FILTROS]', {
-        camposData: { bacen: 'dataEntrada', n2: 'dataEntradaN2', ra: 'dataReclam', procon: 'dataProcon', n1: 'createdAt' },
+        camposData: {
+          bacen: 'dataEntrada',
+          n2: 'dataEntradaN2',
+          ra: 'dataReclam',
+          procon: 'dataProcon',
+          timePortabilidade: 'dataEntrada',
+        },
         campoMotivoFiltro: 'motivoReduzido',
-        n1SemFiltroMotivoProduto: true,
-        statsRoute: 'v1.21.0',
+        porTipoN1Card: 'Time Portabilidade → reclamacoes_timePortabilidade',
+        statsRoute: 'v1.21.4',
         statsTz: STATS_DATE_ZONE,
         dataInicio: dataInicioRaw,
         dataFim: dataFimRaw || '(hoje)',
@@ -642,23 +656,23 @@ function initStatsRoutes(connectToMongo) {
         filtroN2: JSON.stringify(filtroN2),
         filtroRA: JSON.stringify(filtroReclameAqui),
         filtroProcon: JSON.stringify(filtroProcon),
-        filtroN1: JSON.stringify(filtroN1),
+        filtroTimePortabilidade: JSON.stringify(filtroTimePortabilidade),
       });
 
-      const [bacen, n2Pix, reclameAquiDocs, proconDocs, n1Docs] = await Promise.all([
+      const [bacen, n2Pix, reclameAquiDocs, proconDocs, timePortabilidadeDocs] = await Promise.all([
         db.collection('reclamacoes_bacen').find(filtroBacen).toArray(),
         db.collection('reclamacoes_n2Pix').find(filtroN2).toArray(),
         db.collection('reclamacoes_reclameAqui').find(filtroReclameAqui).toArray(),
         db.collection('reclamacoes_procon').find(filtroProcon).toArray(),
-        db.collection(N1_STATS_COLLECTION).find(filtroN1).toArray(),
+        db.collection('reclamacoes_timePortabilidade').find(filtroTimePortabilidade).toArray(),
       ]);
 
-      console.log('[GET /api/stats] stats v1.21.0 | n1Docs:', n1Docs.length, '| filtroN1 keys:', Object.keys(filtroN1));
+      console.log('[GET /api/stats] stats v1.21.3 | timePortabilidadeDocs:', timePortabilidadeDocs.length, '| filtro keys:', Object.keys(filtroTimePortabilidade));
 
-      const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...n1Docs];
+      const todas = [...bacen, ...n2Pix, ...reclameAquiDocs, ...proconDocs, ...timePortabilidadeDocs];
 
       const porTipo = {
-        N1: calcularStatsCardN1(n1Docs),
+        N1: enrichComMostradoresOuvidoria(calcularStatsPorTipo(timePortabilidadeDocs), timePortabilidadeDocs),
         N2: enrichComMostradoresOuvidoria(calcularStatsPorTipo(n2Pix), n2Pix),
         'Reclame Aqui': enrichComMostradoresOuvidoria(calcularStatsPorTipo(reclameAquiDocs), reclameAquiDocs),
         Bacen: enrichComMostradoresOuvidoria(calcularStatsPorTipo(bacen), bacen),
@@ -671,7 +685,7 @@ function initStatsRoutes(connectToMongo) {
         n2: n2Pix.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
         ra: reclameAquiDocs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
         procon: proconDocs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
-        n1: n1Docs.filter((r) => documentoEscaladoN2ContagemN1(r)).length,
+        timePortabilidade: timePortabilidadeDocs.filter((r) => classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado').length,
         total: todas.filter((r) => (
           isDocN1Stats(r)
             ? documentoEscaladoN2ContagemN1(r)
@@ -680,7 +694,14 @@ function initStatsRoutes(connectToMongo) {
       };
       console.log('[STATS_RESULT]', JSON.stringify({
         filtros: { dataInicio: dataInicioRaw, dataFim: dataFimRaw || '(hoje)', produtos, motivos },
-        docsRetornados: { bacen: bacen.length, n2: n2Pix.length, ra: reclameAquiDocs.length, procon: proconDocs.length, n1: n1Docs.length, total: todas.length },
+        docsRetornados: {
+          bacen: bacen.length,
+          n2: n2Pix.length,
+          ra: reclameAquiDocs.length,
+          procon: proconDocs.length,
+          timePortabilidade: timePortabilidadeDocs.length,
+          total: todas.length,
+        },
         pixLiberadoNoPeriodo: pixLiberadoPorTipo,
         porTipo,
       }));
@@ -696,6 +717,233 @@ function initStatsRoutes(connectToMongo) {
         message: 'Erro ao buscar estatísticas',
         error: error.message,
         data: { porTipo: {} }
+      });
+    }
+  });
+
+  /** Liberados no painel: N1 = Escalado N2 (escalar_chamado); ouvidoria = classificação excludente "liberado". */
+  function documentoContribuiLiberadosPainel(r) {
+    if (r == null) return false;
+    if (isDocN1Stats(r)) return documentoEscaladoN2ContagemN1(r);
+    return classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado';
+  }
+
+  function parseProdutoMotivoQuery(req) {
+    const produtosRaw = req.query.produto;
+    const produtos = typeof produtosRaw === 'string'
+      ? produtosRaw.split(',').map((p) => p.trim()).filter(Boolean)
+      : Array.isArray(produtosRaw)
+        ? produtosRaw.filter((p) => p && String(p).trim()).map((p) => String(p).trim())
+        : [];
+    const motivosRaw = req.query.motivo;
+    const motivos = typeof motivosRaw === 'string'
+      ? motivosRaw.split(',').map((m) => m.trim()).filter(Boolean)
+      : Array.isArray(motivosRaw)
+        ? motivosRaw.filter((m) => m && String(m).trim()).map((m) => String(m).trim())
+        : [];
+    return { produtos, motivos };
+  }
+
+  function fmtDiaExcelHeader(yyyyMmDd) {
+    const [y, m, d] = String(yyyyMmDd).split('-');
+    return d && m ? `${d}/${m}` : yyyyMmDd;
+  }
+
+  /**
+   * Agregação tabela conciliação (JSON + export Excel).
+   */
+  async function buildTabelaLiberacaoData(db, req) {
+    const { dataInicio, dataFim } = normalizarIntervaloDatasQueryStats(req.query.dataInicio, req.query.dataFim);
+    const { produtos, motivos } = parseProdutoMotivoQuery(req);
+
+    const filtroProduto = criarFiltroProduto(produtos);
+    const filtroMotivo = criarFiltroMotivo(motivos);
+
+    const filtroDataBacen = criarFiltroDataPorCollection('reclamacoes_bacen', dataInicio, dataFim);
+    const filtroDataN2 = criarFiltroDataPorCollection('reclamacoes_n2Pix', dataInicio, dataFim);
+    const filtroDataRA = criarFiltroDataPorCollection('reclamacoes_reclameAqui', dataInicio, dataFim);
+    const filtroDataProcon = criarFiltroDataPorCollection('reclamacoes_procon', dataInicio, dataFim);
+    const filtroDataTimePort = criarFiltroDataPorCollection('reclamacoes_timePortabilidade', dataInicio, dataFim);
+
+    const filtroBacen = mesclarFiltros(filtroDataBacen, filtroProduto, filtroMotivo);
+    const filtroN2 = mesclarFiltros(filtroDataN2, filtroProduto, filtroMotivo);
+    const filtroReclameAqui = mesclarFiltros(filtroDataRA, filtroProduto, filtroMotivo);
+    const filtroProcon = mesclarFiltros(filtroDataProcon, filtroProduto, filtroMotivo);
+    const filtroTimePortabilidade = mesclarFiltros(filtroDataTimePort, filtroProduto, filtroMotivo);
+
+    const [bacen, n2Pix, reclameAquiDocs, proconDocs, timePortabilidadeDocs] = await Promise.all([
+      db.collection('reclamacoes_bacen').find(filtroBacen).toArray(),
+      db.collection('reclamacoes_n2Pix').find(filtroN2).toArray(),
+      db.collection('reclamacoes_reclameAqui').find(filtroReclameAqui).toArray(),
+      db.collection('reclamacoes_procon').find(filtroProcon).toArray(),
+      db.collection('reclamacoes_timePortabilidade').find(filtroTimePortabilidade).toArray(),
+    ]);
+
+    const diaStr = (d) => {
+      if (!d) return null;
+      const dt = new Date(d);
+      return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
+    };
+
+    const CARD_GROUPS = [
+      { key: 'N1', label: 'Time Portabilidade', docs: timePortabilidadeDocs, dateField: 'dataEntrada' },
+      { key: 'Reclame Aqui', label: 'RA', docs: reclameAquiDocs, dateField: 'dataReclam' },
+      { key: 'Bacen', label: 'Bacen', docs: bacen, dateField: 'dataEntrada' },
+      { key: 'Procon', label: 'Procon', docs: proconDocs, dateField: 'dataProcon' },
+      { key: 'N2', label: 'N2', docs: n2Pix, dateField: 'dataEntradaN2' },
+    ];
+
+    const diasSet = new Set();
+    CARD_GROUPS.forEach(({ docs, dateField }) => {
+      docs.forEach((doc) => {
+        const dia = diaStr(doc[dateField]);
+        if (dia) diasSet.add(dia);
+      });
+    });
+    const dias = Array.from(diasSet).sort();
+
+    const linhas = CARD_GROUPS.map(({ key, label, docs, dateField }) => {
+      const ocorrPorDia = {};
+      const libPorDia = {};
+      docs.forEach((doc) => {
+        const dia = diaStr(doc[dateField]);
+        if (!dia) return;
+        if (documentoELiberacaoChavePixExclusivo(doc)) {
+          ocorrPorDia[dia] = (ocorrPorDia[dia] || 0) + 1;
+        }
+        if (documentoContribuiLiberadosPainel(doc)) {
+          libPorDia[dia] = (libPorDia[dia] || 0) + 1;
+        }
+      });
+      const porDia = {};
+      dias.forEach((d) => {
+        porDia[d] = {
+          ocorrencias: ocorrPorDia[d] || 0,
+          liberados: libPorDia[d] || 0,
+        };
+      });
+      let sumO = 0;
+      let sumL = 0;
+      dias.forEach((d) => {
+        sumO += porDia[d].ocorrencias;
+        sumL += porDia[d].liberados;
+      });
+      return { key, label, porDia, totais: { ocorrencias: sumO, liberados: sumL } };
+    });
+
+    return { dias, linhas };
+  }
+
+  /**
+   * GET /api/stats/tabela-liberacao/export
+   * Excel alinhado à tela (Card, Tipo, Total, colunas por dia).
+   */
+  router.get('/tabela-liberacao/export', async (req, res) => {
+    try {
+      let client;
+      try {
+        client = await connectToMongo();
+      } catch (err) {
+        return res.status(503).send('MongoDB não configurado');
+      }
+      const db = client.db('hub_ouvidoria');
+      const { dias, linhas } = await buildTabelaLiberacaoData(db, req);
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Painel Tempo Real';
+      const ws = wb.addWorksheet('Conciliação', { views: [{ state: 'frozen', ySplit: 1 }] });
+      const headerRow = ['Card', 'Tipo', 'Total', ...dias.map((d) => fmtDiaExcelHeader(d))];
+      ws.addRow(headerRow);
+      ws.getRow(1).font = { bold: true };
+
+      linhas.forEach((row) => {
+        const pd = row.porDia || {};
+        const tot = row.totais || { ocorrencias: 0, liberados: 0 };
+        const sumO = tot.ocorrencias;
+        const sumL = tot.liberados;
+        const resumoDias = dias.map((d) => {
+          const o = pd[d]?.ocorrencias ?? 0;
+          const l = pd[d]?.liberados ?? 0;
+          return `${o}/${l}`;
+        });
+        ws.addRow([row.label, 'Resumo', `${sumO} / ${sumL}`, ...resumoDias]);
+        ws.addRow([row.label, 'Ocorrências', sumO, ...dias.map((d) => pd[d]?.ocorrencias ?? 0)]);
+        ws.addRow([row.label, 'Liberados', sumL, ...dias.map((d) => pd[d]?.liberados ?? 0)]);
+      });
+
+      ws.getColumn(1).width = 22;
+      ws.getColumn(2).width = 14;
+      ws.getColumn(3).width = 12;
+
+      const stamp = DateTime.now().setZone('utc').toFormat('yyyyMMdd_HHmmss');
+      const buffer = await wb.xlsx.writeBuffer();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="conciliacao_pix_${stamp}.xlsx"`);
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Erro export tabela liberação:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  /**
+   * GET /api/stats/relatorio-ouvidoria-base
+   * Mesmo conteúdo lógico de scripts/relatorioOuvidoria4AbasTotaisExcel.js + aba timePortabilidade.
+   */
+  router.get('/relatorio-ouvidoria-base', async (req, res) => {
+    try {
+      let client;
+      try {
+        client = await connectToMongo();
+      } catch (err) {
+        return res.status(503).send('MongoDB não configurado');
+      }
+      const db = client.db('hub_ouvidoria');
+      const { dataInicio, dataFim } = normalizarIntervaloDatasQueryStats(req.query.dataInicio, req.query.dataFim);
+      const { produtos, motivos } = parseProdutoMotivoQuery(req);
+      const { gerarRelatorioOuvidoriaBaseExcelBuffer } = require('../services/relatorioOuvidoriaBaseExcel');
+      const buffer = await gerarRelatorioOuvidoriaBaseExcelBuffer({ db, dataInicio, dataFim, produtos, motivos });
+      const stamp = DateTime.now().setZone('utc').toFormat('yyyyMMdd_HHmmss');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="relatorio_ouvidoria_base_${stamp}.xlsx"`);
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Erro relatorio ouvidoria base:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  /**
+   * GET /api/stats/tabela-liberacao
+   * Query: dataInicio, dataFim, produto, motivo (igual GET /api/stats).
+   * Resposta: dias[] + linhas[] (porDia + totais por card).
+   */
+  router.get('/tabela-liberacao', async (req, res) => {
+    try {
+      let client;
+      try {
+        client = await connectToMongo();
+      } catch (err) {
+        return res.status(503).json({
+          success: false,
+          message: 'MongoDB não configurado: ' + err.message,
+          data: { dias: [], linhas: [] },
+        });
+      }
+      const db = client.db('hub_ouvidoria');
+      const { dias, linhas } = await buildTabelaLiberacaoData(db, req);
+
+      res.json({
+        success: true,
+        data: { dias, linhas },
+      });
+    } catch (error) {
+      console.error('Erro ao buscar tabela liberação:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar tabela de liberação',
+        error: error.message,
+        data: { dias: [], linhas: [] },
       });
     }
   });
@@ -1086,3 +1334,6 @@ module.exports.calcularStatsCardN1 = calcularStatsCardN1;
 module.exports.enrichComMostradoresOuvidoria = enrichComMostradoresOuvidoria;
 module.exports.auditoriaPainelPredicatesPorDoc = auditoriaPainelPredicatesPorDoc;
 module.exports.classificacaoDesdobramentoOuvidoriaNaoN1 = classificacaoDesdobramentoOuvidoriaNaoN1;
+/** Scripts / relatórios: mesmo predicado “Liberação Chave Pix” do GET / (motivos_chave_pix / detalhe_2026 / motivoReduzido). */
+module.exports.documentoELiberacaoChavePixExclusivo = documentoELiberacaoChavePixExclusivo;
+module.exports.documentoResolvidoParaMetricas = documentoResolvidoParaMetricas;

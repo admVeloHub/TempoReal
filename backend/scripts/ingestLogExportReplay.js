@@ -1,6 +1,22 @@
 /**
  * Exportar payloads de octadesk_ingest_log ou reenviar ao webhook local (teste).
  * VERSION: v1.0.0
+(function loadVelohubFonteEnv(here) {
+  const path = require('path');
+  const fs = require('fs');
+  let d = here;
+  for (let i = 0; i < 14; i++) {
+    const loader = path.join(d, 'FONTE DA VERDADE', 'bootstrapFonteEnv.cjs');
+    if (fs.existsSync(loader)) {
+      require(loader).loadFrom(here);
+      return;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
+})(__dirname);
+
  *
  * Usa MONGO_ENV do backend/.env (mesmo cluster que Cloud Run se apontar a mesma URI).
  *
@@ -19,7 +35,6 @@
  *   ... --outcome upsert
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const fs = require('fs').promises;
 const path = require('path');
