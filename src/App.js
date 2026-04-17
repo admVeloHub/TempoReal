@@ -1,7 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.4.13
+ * VERSION: v1.4.14
  *
+ * v1.4.14: Aba Conciliação — autorização por e-mail @velotax (lista explícita); não usa mais nome exibido.
  * v1.4.13: Aba Conciliação — tabela só via filtros globais (engrenagem); layout export/divisor na aba.
  * v1.4.12: Aba Conciliação — onFiltrosChange (período) sincroniza filtros globais + stats; rótulo "Conciliação".
  * v1.4.11: Aba "Tabela de liberação" (visibilidade restrita); filtros compartilhados com Pix: Tempo Real.
@@ -129,28 +130,25 @@ const TABS_BASE = [
 
 const TAB_TABELA_LIBERACAO = { id: 'tabela-liberacao', label: 'Conciliação' };
 
-/** Nomes autorizados a ver a aba Tabela de liberação (comparação sem acentos). */
-function nomePainelNormalizado(n) {
-  return String(n || '')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .trim()
-    .toLowerCase();
+/** E-mails autorizados a ver a aba Conciliação (trim + minúsculas). */
+function emailPainelNormalizado(e) {
+  return String(e || '').trim().toLowerCase();
 }
 
-const NOMES_TAB_TABELA_LIBERACAO = new Set([
-  'lucas gravina',
-  'emerson jose',
-  'andre violaro',
-].map((s) => nomePainelNormalizado(s)));
+const EMAILS_TAB_CONCILIACAO = new Set([
+  'lucas.gravina@velotax.com.br',
+  'emerson.jose@velotax.com.br',
+  'anderson.silva@velotax.com.br',
+  'andre.violaro@velotax.com.br',
+]);
 
-function podeVerTabelaLiberacao(userName) {
-  return NOMES_TAB_TABELA_LIBERACAO.has(nomePainelNormalizado(userName));
+function podeVerTabelaLiberacao(userEmail) {
+  return EMAILS_TAB_CONCILIACAO.has(emailPainelNormalizado(userEmail));
 }
 
-function tabsParaUsuario(userName) {
+function tabsParaUsuario(userEmail) {
   const tabs = [...TABS_BASE];
-  if (podeVerTabelaLiberacao(userName)) tabs.push(TAB_TABELA_LIBERACAO);
+  if (podeVerTabelaLiberacao(userEmail)) tabs.push(TAB_TABELA_LIBERACAO);
   return tabs;
 }
 
@@ -290,8 +288,9 @@ function App() {
 
   const userSession = getUserSession();
   const userName = userSession?.user?.name || 'Usuário';
+  const userEmail = userSession?.user?.email || '';
   const userPicture = userSession?.user?.picture;
-  const tabsHeader = tabsParaUsuario(userName);
+  const tabsHeader = tabsParaUsuario(userEmail);
 
   useEffect(() => {
     checkAuthenticationState().then((ok) => {
@@ -400,10 +399,10 @@ function App() {
   }, [modalAberto]);
 
   useEffect(() => {
-    if (!podeVerTabelaLiberacao(userName) && activeTab === 'tabela-liberacao') {
+    if (!podeVerTabelaLiberacao(userEmail) && activeTab === 'tabela-liberacao') {
       setActiveTab('pix-tempo-real');
     }
-  }, [userName, activeTab]);
+  }, [userEmail, activeTab]);
 
   useEffect(() => {
     const h = (e) => {

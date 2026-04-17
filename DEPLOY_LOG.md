@@ -2,6 +2,23 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-04-17 17:14  
+**Tipo:** Push GitHub  
+**Versão:** `src/App.js` v1.4.14  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `src/App.js` v1.4.14 — aba Conciliação: autorização por e-mail (`userSession.user.email`); allowlist: `lucas.gravina@velotax.com.br`, `emerson.jose@velotax.com.br`, `anderson.silva@velotax.com.br`, `andre.violaro@velotax.com.br`; removida comparação por nome exibido
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Restringe a visibilidade da aba Conciliação a quatro endereços corporativos explícitos, evitando ambiguidade de nome no painel.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-16 18:48  
 **Tipo:** Push GitHub  
 **Versão:** `backend/routes/stats.js` v1.21.7 / `src/App.js` v1.4.13 / `src/components/AbaTabelaLiberacao.js` v1.2.1 / `src/services/api.js` v1.4.15 / `backend/services/relatorioOuvidoriaBaseExcel.js` v1.0.2 / `LISTA_SCHEMAS.rb` v4.17.1  
