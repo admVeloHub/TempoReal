@@ -2,6 +2,24 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-05-25 14:45  
+**Tipo:** Push GitHub  
+**Versão:** `backend/scripts/auditoriaDuplicidadeLiberadosCpfs.js` v1.0.0 / `backend/scripts/auditoriaPixLiberadoMotivoChavePix.js` v1.0.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/scripts/auditoriaDuplicidadeLiberadosCpfs.js` v1.0.0 — auditoria de duplicidade de CPFs na contagem de Liberados (paridade `contribuiPixLiberadoCard` / GET /api/stats)
+- `backend/scripts/auditoriaPixLiberadoMotivoChavePix.js` v1.0.0 — compara universo Liberação Chave Pix + `pixLiberado=true` vs Liberados exibidos no painel
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Inclui scripts CLI de auditoria operacional para reconciliar contagem de Liberados do painel com predicados de `stats.js`, incluindo análise de duplicidade por CPF e divergência motivo Chave Pix vs card Liberados.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-05-25 11:30  
 **Tipo:** Push GitHub  
 **Versão:** `backend/routes/stats.js` v1.21.9 / `src/components/AbaTabelaLiberacao.js` v1.3.8 / `src/App.js` v1.4.16 / `src/components/FiltrosAuxiliar.js` v1.2.10 / `src/services/api.js` v1.4.17 / `backend/scripts/relatorioOuvidoria4AbasTotaisExcel.js` v1.8.0  
