@@ -2,6 +2,24 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-05-25 16:30  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.22.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.22.0 — `liberacaoAnterior === true`: conta em `ocorrencias`; exclui de `pixLiberado`, `pixRetido` e `solLiberacao`; nova classe excludente `liberacaoAnterior` em `classificacaoDesdobramentoOuvidoriaNaoN1`; export `documentoLiberacaoAnterior` e flag em `auditoriaPainelPredicatesPorDoc`
+- Removidos `backend/scripts/auditoriaDuplicidadeLiberadosCpfs.js` e `backend/scripts/auditoriaPixLiberadoMotivoChavePix.js` (scripts operacionais locais, não versionados no repositório)
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Implementa a regra de negócio do campo `liberacaoAnterior` (LISTA_SCHEMAS.rb) nos contadores do painel — casos de liberação anterior entram só em ocorrências, fora de liberados/retidos e da base `solLiberacao`. Reverte inclusão indevida dos scripts de auditoria CLI no repositório remoto.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-05-25 14:45  
 **Tipo:** Push GitHub  
 **Versão:** `backend/scripts/auditoriaDuplicidadeLiberadosCpfs.js` v1.0.0 / `backend/scripts/auditoriaPixLiberadoMotivoChavePix.js` v1.0.0  

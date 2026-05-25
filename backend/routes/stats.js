@@ -1,6 +1,7 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.21.9
+ * VERSION: v1.22.0
+ * v1.22.0: liberacaoAnterior === true — conta em ocorrencias (docs.length); exclui de pixLiberado, pixRetido e solLiberacao; classe excludente liberacaoAnterior (LISTA_SCHEMAS.rb).
  * v1.21.9: tabela-liberacao — matriz dia×tipo (UI transposta); casosSemFechamento (pixLiberado=true && !resolvido); Excel 2 abas; fmtDiaComSemanaUtc.
  * v1.21.8: tabela-liberacao — colunas dia = cada dia UTC entre dataInicio e dataFim (inclusive); conta só registros cuja data do canal cai no intervalo ISO; Total = soma só desse período (alinhado às colunas).
  * v1.21.7: GET /api/stats/tabela-liberacao/export (Excel visão tabela), GET /api/stats/relatorio-ouvidoria-base (5 abas + timePortabilidade); tabela JSON com totais por card.
@@ -35,6 +36,7 @@
  * Filtro produto ouvidoria (Bacen, N2, RA, Procon, Time Portabilidade): campo produto.
  * Parâmetro motivo (UI): ouvidoria usa criarFiltroMotivoItemOuvidoria (inclui porTipo.N1 / Time Portabilidade).
  * emAberto ouvidoria: !Finalizado.Resolvido.
+ * liberacaoAnterior (LISTA_SCHEMAS.rb): ocorrencias sim; pixLiberado/pixRetido/solLiberacao não; resolvido ou em aberto irrelevante para liberados/retidos.
  */
 
 const express = require('express');
@@ -438,6 +440,11 @@ function documentoResolvidoParaMetricas(r) {
   return r.Finalizado != null && r.Finalizado.Resolvido === true;
 }
 
+/** LISTA_SCHEMAS.rb — Liberação anterior (Canais/Protocolos); fora de Liberados/Retidos/solLiberacao; permanece em ocorrencias. */
+function documentoLiberacaoAnterior(r) {
+  return r != null && r.liberacaoAnterior === true;
+}
+
 /** N1: só retido_no_atendimento === false. Ouvidoria: retido_no_atendimento ou legado pixLiberado. */
 function documentoLiberadoChavePixParaMetricas(r) {
   if (r == null) return false;
@@ -455,8 +462,8 @@ function documentoLiberadoChavePixParaMetricas(r) {
 
 /**
  * Desdobramento excludente nos cards ouvidoria (não‑N1): cada documento em no máximo uma classe exibida —
- * emAberto | semResposta | opCancelada | liberado | retido | outros.
- * Prioridade: não resolvido → semRespostaCliente → motivo cancelamento 7 dias → (universo Lib. Chave Pix) liberado vs retido.
+ * emAberto | semResposta | opCancelada | liberacaoAnterior | liberado | retido | outros.
+ * Prioridade: não resolvido → semRespostaCliente → motivo cancelamento 7 dias → liberacaoAnterior → (universo Lib. Chave Pix) liberado vs retido.
  * "Liberado" no painel só após resolvido; pixLiberado legado sem Resolvido cai em Em aberto, não em Liberados.
  */
 function classificacaoDesdobramentoOuvidoriaNaoN1(r) {
@@ -464,6 +471,7 @@ function classificacaoDesdobramentoOuvidoriaNaoN1(r) {
   if (!documentoResolvidoParaMetricas(r)) return 'emAberto';
   if (r.semRespostaCliente === true) return 'semResposta';
   if (motivoContemCancelamento7Dias(r.motivoReduzido)) return 'opCancelada';
+  if (documentoLiberacaoAnterior(r)) return 'liberacaoAnterior';
   if (!documentoELiberacaoChavePixExclusivo(r)) return 'outros';
   if (documentoLiberadoChavePixParaMetricas(r)) return 'liberado';
   return 'retido';
@@ -523,7 +531,9 @@ function calcularStatsPorTipo(docs) {
     (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
   )).length;
 
-  const docsLiberacaoChavePix = docs.filter((r) => documentoELiberacaoChavePixExclusivo(r));
+  const docsLiberacaoChavePix = docs.filter(
+    (r) => documentoELiberacaoChavePixExclusivo(r) && !documentoLiberacaoAnterior(r)
+  );
   const solLiberacao = docsLiberacaoChavePix.length;
 
   /** N1: Escalado N2 e Retidos sobre todas as ocorrências; ouvidoria: Liberados/Retidos = classes excludentes (v1.21.0). */
@@ -584,15 +594,17 @@ function auditoriaPainelPredicatesPorDoc(r) {
     r.procon === true ||
     (r.protocolosProcon && Array.isArray(r.protocolosProcon) && r.protocolosProcon.length > 0)
   );
+  const libAnterior = documentoLiberacaoAnterior(r);
   const cls = n1 ? null : classificacaoDesdobramentoOuvidoriaNaoN1(r);
   return {
     isDocN1Stats: n1,
     liberacaoChavePixExclusivo: libExclusivo,
+    liberacaoAnterior: libAnterior,
     resolvidoParaMetricas: resolvido,
     liberadoChavePixParaMetricas: liberadoPix,
     emAbertoCard,
     contribuiCaEProtocolos: caEProtocolos,
-    contribuiSolLiberacao: libExclusivo,
+    contribuiSolLiberacao: libExclusivo && !libAnterior,
     contribuiPixLiberadoCard: n1 ? escaladoN2N1 : cls === 'liberado',
     contribuiPixRetidoCard: n1 ? retidoN1 : cls === 'retido',
     semRespostaClienteAposResolvido: n1 ? resolvido && r.semRespostaCliente === true : cls === 'semResposta',
@@ -1474,3 +1486,4 @@ module.exports.classificacaoDesdobramentoOuvidoriaNaoN1 = classificacaoDesdobram
 /** Scripts / relatórios: mesmo predicado “Liberação Chave Pix” do GET / (motivos_chave_pix / detalhe_2026 / motivoReduzido). */
 module.exports.documentoELiberacaoChavePixExclusivo = documentoELiberacaoChavePixExclusivo;
 module.exports.documentoResolvidoParaMetricas = documentoResolvidoParaMetricas;
+module.exports.documentoLiberacaoAnterior = documentoLiberacaoAnterior;
