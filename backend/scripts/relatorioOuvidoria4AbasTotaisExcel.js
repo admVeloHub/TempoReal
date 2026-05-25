@@ -1,9 +1,10 @@
 /**
- * Excel (.xlsx) — uma aba por canal (n2pix, procon, reclameAqui, bacen), com TODOS os documentos
- * das coleções hub_ouvidoria reclamacoes_n2Pix | reclamacoes_procon | reclamacoes_reclameAqui | reclamacoes_bacen.
+ * Excel (.xlsx) — uma aba por canal (n2pix, procon, reclameAqui, bacen, timePortabilidade), com TODOS os documentos
+ * das coleções hub_ouvidoria correspondentes (incl. reclamacoes_timePortabilidade = Time Portabilidade / card N1 no painel).
  *
  * Colunas:
  * - cpf
+ * - criado_em_sp — só quando filtro de hora ativo: data/hora do createdAt em America/Sao_Paulo (dd/MM/yyyy HH:mm:ss)
  * - data_referencia — calendário UTC do instante armazenado (dd/MM/yyyy); ex. 2026-04-07T00:00:00.000Z → 07/04/2026 (sem conversão STATS_TZ)
  * - mes — ano-mês (yyyy-MM) no mesmo calendário UTC da data_referencia
  * - produto — campo produto (LISTA_SCHEMAS)
@@ -15,9 +16,16 @@
  * Filtro Mongo opcional (paridade período com GET /api/stats): defina DATA_INICIO (e opcionalmente DATA_FIM).
  * Sem DATA_INICIO: find({}) na coleção (totalidade bruta).
  *
- * VERSION: v1.6.0
- * v1.6.0: Exportação web (GET /api/stats/relatorio-ouvidoria-base) usa backend/services/relatorioOuvidoriaBaseExcel.js com 5 abas (incl. timePortabilidade). Este script permanece com 4 abas para compatibilidade CLI; alinhar env/ABAS ao subir relatório completo.
- * v1.0.0: primeira versão; 4 abas; classificação via require('../routes/stats').
+ * Filtro por hora de criação (versão "após N h em São Paulo"):
+ *   CREATED_AT_HORA_MINIMA_SAO_PAULO=14 — só entram linhas com createdAt >= 14:00:00.000
+ *   no relógio de America/Sao_Paulo naquele dia; documentos sem createdAt são excluídos.
+ *   Inclui coluna criado_em_sp. Sufixo no arquivo: _criadasApos14hSP. Omita a env para planilha sem esse filtro.
+ *
+ * VERSION: v1.8.0
+ * v1.6.0: relatorioOuvidoriaBaseExcel.js (GET) alinhado a este script.
+ * v1.7.0: filtro opcional createdAt a partir de hora em America/Sao_Paulo (env CREATED_AT_HORA_MINIMA_SAO_PAULO) + coluna criado_em_sp.
+ * v1.8.0: aba timePortabilidade (reclamacoes_timePortabilidade, dataEntrada); arquivo relatorio_ouvidoria_5canais_totais_*.xlsx.
+ * v1.0.0: primeira versão; classificação via require('../routes/stats').
  * v1.1.0: coluna mes (mês/ano da data de referência por coleção, fuso STATS_TZ).
  * v1.2.0: coluna data_referencia (data completa) + mes (adicional, não substitui a data).
  * v1.3.0: status_chamado = Em aberto | Resolvido (documentoResolvidoParaMetricas); pix/retido seguem classificacaoDesdobramentoOuvidoriaNaoN1.
@@ -81,6 +89,7 @@ const ABAS = [
   { sheet: 'procon', collection: 'reclamacoes_procon' },
   { sheet: 'reclameAqui', collection: 'reclamacoes_reclameAqui' },
   { sheet: 'bacen', collection: 'reclamacoes_bacen' },
+  { sheet: 'timePortabilidade', collection: 'reclamacoes_timePortabilidade' },
 ];
 
 /** Mesmo eixo de data do filtro GET /api/stats (backend/routes/stats.js CAMPOS_DATA_POR_COLLECTION). */
@@ -89,11 +98,47 @@ const CAMPO_DATA_REFERENCIA_POR_COLLECTION = {
   reclamacoes_n2Pix: 'dataEntradaN2',
   reclamacoes_reclameAqui: 'dataReclam',
   reclamacoes_procon: 'dataProcon',
+  reclamacoes_timePortabilidade: 'dataEntrada',
 };
 
 const STATS_DATE_ZONE = process.env.STATS_TZ || 'America/Sao_Paulo';
 /** Exibição na planilha: dia/mês/ano do instante gravado no Mongo (UTC), alinhado a ISO tipo 2026-04-07T00:00:00.000Z → 07/04/2026. */
 const DATA_REF_EXCEL_ZONE = 'utc';
+
+/**
+ * 0–23: só linhas cujo createdAt, no relógio de STATS_TZ, é naquele dia a partir de HH:00:00.000.
+ * null = sem filtro de createdAt.
+ */
+function horaMinimaCreatedAtSaoPaulo() {
+  const raw = process.env.CREATED_AT_HORA_MINIMA_SAO_PAULO;
+  if (raw == null || String(raw).trim() === '') return null;
+  const h = parseInt(String(raw).trim(), 10);
+  if (Number.isNaN(h) || h < 0 || h > 23) {
+    throw new Error('CREATED_AT_HORA_MINIMA_SAO_PAULO deve ser inteiro 0..23');
+  }
+  return h;
+}
+
+function createdAtSaoPaulo(r) {
+  if (r == null || r.createdAt == null) return null;
+  const js = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+  if (Number.isNaN(js.getTime())) return null;
+  return DateTime.fromMillis(js.getTime(), { zone: 'utc' }).setZone(STATS_DATE_ZONE);
+}
+
+function passaFiltroCreatedAposHoraSaoPaulo(r, horaMin) {
+  if (horaMin == null) return true;
+  const sp = createdAtSaoPaulo(r);
+  if (sp == null || !sp.isValid) return false;
+  const corte = sp.startOf('day').set({ hour: horaMin, minute: 0, second: 0, millisecond: 0 });
+  return sp.toMillis() >= corte.toMillis();
+}
+
+function fmtCriadoEmSaoPaulo(r) {
+  const sp = createdAtSaoPaulo(r);
+  if (sp == null || !sp.isValid) return '(sem createdAt)';
+  return sp.toFormat('dd/MM/yyyy HH:mm:ss');
+}
 
 function motivosRelatorioParaMongoOpcional() {
   if (process.env.SEM_FILTRO_MOTIVO === '1' || String(process.env.SEM_FILTRO_MOTIVO || '').toLowerCase() === 'true') {
@@ -207,20 +252,23 @@ function fmtMotivoReduzido(r) {
   return '(sem motivo)';
 }
 
-function linhaParaPlanilha(collectionName, r) {
+function linhaParaPlanilha(collectionName, r, opts) {
+  const { incluirCriadoEmSp } = opts || {};
   const cls = classificacaoDesdobramentoOuvidoriaNaoN1(r);
   const pixRetirado = cls === 'liberado' ? 'Sim' : 'Não';
   const retido = cls === 'retido' ? 'Sim' : 'Não';
-  return {
-    cpf: fmtCpf(r),
-    data_referencia: fmtDataReferencia(collectionName, r),
-    mes: fmtMesAnoReferencia(collectionName, r),
-    produto: fmtProduto(r),
-    motivo: fmtMotivoReduzido(r),
-    pix_foi_retirado: pixRetirado,
-    status_chamado: statusChamadoAbertoResolvido(r),
-    retido,
-  };
+  const out = { cpf: fmtCpf(r) };
+  if (incluirCriadoEmSp) {
+    out.criado_em_sp = fmtCriadoEmSaoPaulo(r);
+  }
+  out.data_referencia = fmtDataReferencia(collectionName, r);
+  out.mes = fmtMesAnoReferencia(collectionName, r);
+  out.produto = fmtProduto(r);
+  out.motivo = fmtMotivoReduzido(r);
+  out.pix_foi_retirado = pixRetirado;
+  out.status_chamado = statusChamadoAbertoResolvido(r);
+  out.retido = retido;
+  return out;
 }
 
 async function main() {
@@ -234,6 +282,10 @@ async function main() {
   await client.connect();
   const db = client.db(DB);
 
+  const horaMinCri = horaMinimaCreatedAtSaoPaulo();
+  const comFiltroCriadoHora = horaMinCri != null;
+  const incluirCriadoEmSp = comFiltroCriadoHora;
+
   const dirOut =
     process.env.OUT_DIR && String(process.env.OUT_DIR).trim()
       ? path.resolve(String(process.env.OUT_DIR).trim())
@@ -242,7 +294,11 @@ async function main() {
     fs.mkdirSync(dirOut, { recursive: true });
   }
   const stamp = DateTime.now().setZone(STATS_DATE_ZONE).toFormat('yyyyMMdd_HHmmss');
-  const arquivo = path.join(dirOut, `relatorio_ouvidoria_4canais_totais_${stamp}.xlsx`);
+  const sufixoFiltroHora = comFiltroCriadoHora ? `_criadasApos${horaMinCri}hSP` : '';
+  const arquivo = path.join(
+    dirOut,
+    `relatorio_ouvidoria_5canais_totais_${stamp}${sufixoFiltroHora}.xlsx`
+  );
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Painel Tempo Real';
@@ -254,19 +310,29 @@ async function main() {
     const filtro = montarFiltroMongo(collection);
     const cursor = db.collection(collection).find(filtro);
     const ws = wb.addWorksheet(sheet, { views: [{ state: 'frozen', ySplit: 1 }] });
-    ws.columns = [
+    const colunas = [
       { header: 'cpf', key: 'cpf', width: 14 },
+    ];
+    if (incluirCriadoEmSp) {
+      colunas.push({ header: 'criado_em_sp', key: 'criado_em_sp', width: 20 });
+    }
+    colunas.push(
       { header: 'data_referencia', key: 'data_referencia', width: 12 },
       { header: 'mes', key: 'mes', width: 10 },
       { header: 'produto', key: 'produto', width: 26 },
       { header: 'motivo', key: 'motivo', width: 40 },
       { header: 'pix_foi_retirado', key: 'pix_foi_retirado', width: 18 },
       { header: 'status_chamado', key: 'status_chamado', width: 14 },
-      { header: 'retido', key: 'retido', width: 10 },
-    ];
+      { header: 'retido', key: 'retido', width: 10 }
+    );
+    ws.columns = colunas;
+    const optsLinha = { incluirCriadoEmSp };
     let n = 0;
     for await (const doc of cursor) {
-      ws.addRow(linhaParaPlanilha(collection, doc));
+      if (!passaFiltroCreatedAposHoraSaoPaulo(doc, horaMinCri)) {
+        continue;
+      }
+      ws.addRow(linhaParaPlanilha(collection, doc, optsLinha));
       n += 1;
     }
     ws.getRow(1).font = { bold: true };
@@ -297,7 +363,7 @@ async function main() {
     ],
     [
       'data_referencia',
-      'dd/MM/yyyy = calendário UTC do Date no Mongo (ex.: 2026-04-07T00:00:00.000+00:00 → 07/04/2026). Campos: Bacen dataEntrada; N2 dataEntradaN2; RA dataReclam; Procon dataProcon. Não usa STATS_TZ na célula.',
+      'dd/MM/yyyy = calendário UTC do Date no Mongo (ex.: 2026-04-07T00:00:00.000+00:00 → 07/04/2026). Campos: Bacen/Time Port. dataEntrada; N2 dataEntradaN2; RA dataReclam; Procon dataProcon. Não usa STATS_TZ na célula.',
     ],
     [
       'mes',
@@ -316,6 +382,12 @@ async function main() {
       'retido',
       'Sim somente quando classificacaoDesdobramentoOuvidoriaNaoN1 === retido (stats.js v1.21.x).',
     ],
+    [
+      'Filtro createdAt (hora São Paulo)',
+      comFiltroCriadoHora
+        ? `CREATED_AT_HORA_MINIMA_SAO_PAULO=${horaMinCri} — documentos com createdAt >= ${horaMinCri}:00 nesse dia em ${STATS_DATE_ZONE}. Sem createdAt: excluído. Coluna criado_em_sp.`
+        : 'Não aplicado (defina CREATED_AT_HORA_MINIMA_SAO_PAULO=0..23, ex. 14, para a versão após 14h).',
+    ],
     ...contagens.map((c) => [`Linhas ${c.sheet}`, String(c.n)]),
   ];
   metaRows.forEach((r, i) => {
@@ -326,6 +398,11 @@ async function main() {
   meta.getColumn(2).width = 88;
 
   await wb.xlsx.writeFile(arquivo);
+  if (comFiltroCriadoHora) {
+    console.log(
+      `[relatorioOuvidoria4AbasTotaisExcel] Filtro createdAt: a partir de ${horaMinCri}:00 em ${STATS_DATE_ZONE} (sufixo: ${sufixoFiltroHora})`
+    );
+  }
   console.log(`[relatorioOuvidoria4AbasTotaisExcel] Arquivo: ${arquivo}`);
 
   await client.close();

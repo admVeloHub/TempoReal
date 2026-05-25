@@ -1,6 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - Stats Route
- * VERSION: v1.21.7
+ * VERSION: v1.21.9
+ * v1.21.9: tabela-liberacao — matriz dia×tipo (UI transposta); casosSemFechamento (pixLiberado=true && !resolvido); Excel 2 abas; fmtDiaComSemanaUtc.
+ * v1.21.8: tabela-liberacao — colunas dia = cada dia UTC entre dataInicio e dataFim (inclusive); conta só registros cuja data do canal cai no intervalo ISO; Total = soma só desse período (alinhado às colunas).
  * v1.21.7: GET /api/stats/tabela-liberacao/export (Excel visão tabela), GET /api/stats/relatorio-ouvidoria-base (5 abas + timePortabilidade); tabela JSON com totais por card.
  * v1.21.6: GET /api/stats/tabela-liberacao — segundo eixo por dia = liberados (pixLiberado / Escalado N2), não retidos.
  * v1.21.5: GET /api/stats/tabela-liberacao — por canal/dia: ocorrências (Liberação Chave Pix) e retirados (regras do painel); mesmos filtros que GET /.
@@ -158,6 +160,21 @@ function normalizarIntervaloDatasQueryStats(dataInicioRaw, dataFimRaw) {
   }
 
   return { dataInicio, dataFim };
+}
+
+/**
+ * Lista YYYY-MM-DD de cada dia de calendário em UTC entre os limites inclusivos do filtro GET /api/stats.
+ * Igual semanticamente a parseDataDiaLocalInicio/Fim — colunas da pivot = período inteiro; Total = soma desses dias.
+ */
+function enumerarDiasIsoUtcIntervaloInclusive(dataInicioDt, dataFimDt) {
+  const start = DateTime.fromJSDate(dataInicioDt, { zone: 'utc' }).startOf('day');
+  const end = DateTime.fromJSDate(dataFimDt, { zone: 'utc' }).startOf('day');
+  if (!start.isValid || !end.isValid || start > end) return [];
+  const out = [];
+  for (let d = start; d <= end; d = d.plus({ days: 1 })) {
+    out.push(d.toISODate());
+  }
+  return out;
 }
 
 function dataInicioOpcionalQueryLocal(raw) {
@@ -728,6 +745,35 @@ function initStatsRoutes(connectToMongo) {
     return classificacaoDesdobramentoOuvidoriaNaoN1(r) === 'liberado';
   }
 
+  /** Casos sem Fechamento (Conciliação): pixLiberado literal true e ainda não resolvido. */
+  function documentoCasosSemFechamentoConciliacao(r) {
+    return r != null && r.pixLiberado === true && !documentoResolvidoParaMetricas(r);
+  }
+
+  const DIAS_SEMANA_PT = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  function fmtDiaExcelHeader(yyyyMmDd) {
+    const [y, m, d] = String(yyyyMmDd).split('-');
+    return d && m ? `${d}/${m}` : yyyyMmDd;
+  }
+
+  function fmtDiaComSemanaUtc(yyyyMmDd) {
+    const dt = DateTime.fromISO(String(yyyyMmDd), { zone: 'utc' });
+    if (!dt.isValid) return fmtDiaExcelHeader(yyyyMmDd);
+    return `${dt.toFormat('dd/MM')} ${DIAS_SEMANA_PT[dt.weekday % 7]}`;
+  }
+
+  function emptyTabelaLiberacaoPayload() {
+    return {
+      dias: [],
+      cards: [],
+      matriz: {},
+      totaisPorDia: {},
+      totaisPorCard: {},
+      casosSemFechamento: { matriz: {}, totaisPorDia: {}, totaisPorCard: {} },
+    };
+  }
+
   function parseProdutoMotivoQuery(req) {
     const produtosRaw = req.query.produto;
     const produtos = typeof produtosRaw === 'string'
@@ -742,11 +788,6 @@ function initStatsRoutes(connectToMongo) {
         ? motivosRaw.filter((m) => m && String(m).trim()).map((m) => String(m).trim())
         : [];
     return { produtos, motivos };
-  }
-
-  function fmtDiaExcelHeader(yyyyMmDd) {
-    const [y, m, d] = String(yyyyMmDd).split('-');
-    return d && m ? `${d}/${m}` : yyyyMmDd;
   }
 
   /**
@@ -779,64 +820,179 @@ function initStatsRoutes(connectToMongo) {
       db.collection('reclamacoes_timePortabilidade').find(filtroTimePortabilidade).toArray(),
     ]);
 
-    const diaStr = (d) => {
-      if (!d) return null;
-      const dt = new Date(d);
+    const diaStr = (dtVal) => {
+      if (!dtVal) return null;
+      const dt = new Date(dtVal);
       return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
     };
 
+    const diaMinIso = DateTime.fromJSDate(dataInicio, { zone: 'utc' }).toISODate();
+    const diaMaxIso = DateTime.fromJSDate(dataFim, { zone: 'utc' }).toISODate();
+
+    /** Colunas por dia de calendário no período do filtro (UTC); não só dias com registros — Total = soma dessas colunas. */
+    const dias = enumerarDiasIsoUtcIntervaloInclusive(dataInicio, dataFim);
+
+    const docsNoPeriodoPorCampo = (docList, dateFieldName) =>
+      docList.filter((doc) => {
+        const dia = diaStr(doc[dateFieldName]);
+        if (!dia) return false;
+        return dia >= diaMinIso && dia <= diaMaxIso;
+      });
+
     const CARD_GROUPS = [
-      { key: 'N1', label: 'Time Portabilidade', docs: timePortabilidadeDocs, dateField: 'dataEntrada' },
-      { key: 'Reclame Aqui', label: 'RA', docs: reclameAquiDocs, dateField: 'dataReclam' },
-      { key: 'Bacen', label: 'Bacen', docs: bacen, dateField: 'dataEntrada' },
-      { key: 'Procon', label: 'Procon', docs: proconDocs, dateField: 'dataProcon' },
-      { key: 'N2', label: 'N2', docs: n2Pix, dateField: 'dataEntradaN2' },
+      {
+        key: 'N1',
+        label: 'Time Portabilidade',
+        docs: docsNoPeriodoPorCampo(timePortabilidadeDocs, 'dataEntrada'),
+        dateField: 'dataEntrada',
+      },
+      {
+        key: 'Reclame Aqui',
+        label: 'RA',
+        docs: docsNoPeriodoPorCampo(reclameAquiDocs, 'dataReclam'),
+        dateField: 'dataReclam',
+      },
+      { key: 'Bacen', label: 'Bacen', docs: docsNoPeriodoPorCampo(bacen, 'dataEntrada'), dateField: 'dataEntrada' },
+      { key: 'Procon', label: 'Procon', docs: docsNoPeriodoPorCampo(proconDocs, 'dataProcon'), dateField: 'dataProcon' },
+      { key: 'N2', label: 'N2', docs: docsNoPeriodoPorCampo(n2Pix, 'dataEntradaN2'), dateField: 'dataEntradaN2' },
     ];
 
-    const diasSet = new Set();
-    CARD_GROUPS.forEach(({ docs, dateField }) => {
-      docs.forEach((doc) => {
-        const dia = diaStr(doc[dateField]);
-        if (dia) diasSet.add(dia);
+    const cards = CARD_GROUPS.map(({ key, label }) => ({ key, label }));
+    const matriz = {};
+    const totaisPorDia = {};
+    const totaisPorCard = {};
+    const sfMatriz = {};
+    const sfTotaisPorDia = {};
+    const sfTotaisPorCard = {};
+
+    dias.forEach((d) => {
+      matriz[d] = {};
+      sfMatriz[d] = {};
+      totaisPorDia[d] = { ocorrencias: 0, liberados: 0 };
+      sfTotaisPorDia[d] = 0;
+      cards.forEach(({ key }) => {
+        matriz[d][key] = { ocorrencias: 0, liberados: 0 };
+        sfMatriz[d][key] = 0;
       });
     });
-    const dias = Array.from(diasSet).sort();
+    cards.forEach(({ key }) => {
+      totaisPorCard[key] = { ocorrencias: 0, liberados: 0 };
+      sfTotaisPorCard[key] = 0;
+    });
 
-    const linhas = CARD_GROUPS.map(({ key, label, docs, dateField }) => {
-      const ocorrPorDia = {};
-      const libPorDia = {};
+    CARD_GROUPS.forEach(({ key, docs, dateField }) => {
       docs.forEach((doc) => {
         const dia = diaStr(doc[dateField]);
-        if (!dia) return;
+        if (!dia || dia < diaMinIso || dia > diaMaxIso) return;
         if (documentoELiberacaoChavePixExclusivo(doc)) {
-          ocorrPorDia[dia] = (ocorrPorDia[dia] || 0) + 1;
+          matriz[dia][key].ocorrencias += 1;
+          totaisPorDia[dia].ocorrencias += 1;
+          totaisPorCard[key].ocorrencias += 1;
         }
         if (documentoContribuiLiberadosPainel(doc)) {
-          libPorDia[dia] = (libPorDia[dia] || 0) + 1;
+          matriz[dia][key].liberados += 1;
+          totaisPorDia[dia].liberados += 1;
+          totaisPorCard[key].liberados += 1;
+        }
+        if (documentoCasosSemFechamentoConciliacao(doc)) {
+          sfMatriz[dia][key] += 1;
+          sfTotaisPorDia[dia] += 1;
+          sfTotaisPorCard[key] += 1;
         }
       });
-      const porDia = {};
-      dias.forEach((d) => {
-        porDia[d] = {
-          ocorrencias: ocorrPorDia[d] || 0,
-          liberados: libPorDia[d] || 0,
-        };
-      });
-      let sumO = 0;
-      let sumL = 0;
-      dias.forEach((d) => {
-        sumO += porDia[d].ocorrencias;
-        sumL += porDia[d].liberados;
-      });
-      return { key, label, porDia, totais: { ocorrencias: sumO, liberados: sumL } };
     });
 
-    return { dias, linhas };
+    return {
+      dias,
+      cards,
+      matriz,
+      totaisPorDia,
+      totaisPorCard,
+      casosSemFechamento: {
+        matriz: sfMatriz,
+        totaisPorDia: sfTotaisPorDia,
+        totaisPorCard: sfTotaisPorCard,
+      },
+    };
+  }
+
+  function escreverAbaConciliacaoExcel(ws, payload) {
+    const { dias, cards, matriz, totaisPorDia, totaisPorCard } = payload;
+    const header1 = ['Data', 'Total', 'Total'];
+    const header2 = ['', 'Ocorrências', 'Liberados'];
+    cards.forEach((c) => {
+      header1.push(c.label, c.label);
+      header2.push('Ocorrências', 'Liberados');
+    });
+    ws.addRow(header1);
+    ws.addRow(header2);
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(2).font = { bold: true };
+    ws.mergeCells(1, 1, 2, 1);
+    ws.mergeCells(1, 2, 1, 3);
+    let col = 4;
+    cards.forEach(() => {
+      ws.mergeCells(1, col, 1, col + 1);
+      col += 2;
+    });
+
+    dias.forEach((dia) => {
+      const td = totaisPorDia[dia] || { ocorrencias: 0, liberados: 0 };
+      const rowO = [fmtDiaComSemanaUtc(dia), td.ocorrencias, ''];
+      const rowL = ['', '', td.liberados];
+      cards.forEach(({ key }) => {
+        const cell = matriz[dia]?.[key] || { ocorrencias: 0, liberados: 0 };
+        rowO.push(cell.ocorrencias, '');
+        rowL.push('', cell.liberados);
+      });
+      ws.addRow(rowO);
+      ws.addRow(rowL);
+    });
+
+    const grandO = cards.reduce((s, { key }) => s + (totaisPorCard[key]?.ocorrencias ?? 0), 0);
+    const grandL = cards.reduce((s, { key }) => s + (totaisPorCard[key]?.liberados ?? 0), 0);
+    const rowTotO = ['Total', grandO, ''];
+    const rowTotL = ['', '', grandL];
+    cards.forEach(({ key }) => {
+      const t = totaisPorCard[key] || { ocorrencias: 0, liberados: 0 };
+      rowTotO.push(t.ocorrencias, '');
+      rowTotL.push('', t.liberados);
+    });
+    ws.addRow(rowTotO);
+    ws.addRow(rowTotL);
+    ws.getRow(ws.rowCount - 1).font = { bold: true };
+    ws.getRow(ws.rowCount).font = { bold: true };
+
+    ws.getColumn(1).width = 18;
+    for (let i = 2; i <= header2.length; i++) ws.getColumn(i).width = 11;
+  }
+
+  function escreverAbaSemFechamentoExcel(ws, payload) {
+    const { dias, cards, casosSemFechamento } = payload;
+    const sf = casosSemFechamento || { matriz: {}, totaisPorDia: {}, totaisPorCard: {} };
+    const header = ['Data', 'Total', ...cards.map((c) => c.label)];
+    ws.addRow(header);
+    ws.getRow(1).font = { bold: true };
+    dias.forEach((dia) => {
+      const row = [fmtDiaComSemanaUtc(dia), sf.totaisPorDia[dia] ?? 0];
+      cards.forEach(({ key }) => {
+        row.push(sf.matriz[dia]?.[key] ?? 0);
+      });
+      ws.addRow(row);
+    });
+    const rowTot = ['Total', Object.values(sf.totaisPorDia || {}).reduce((a, b) => a + b, 0)];
+    cards.forEach(({ key }) => {
+      rowTot.push(sf.totaisPorCard[key] ?? 0);
+    });
+    ws.addRow(rowTot);
+    ws.getRow(ws.rowCount).font = { bold: true };
+    ws.getColumn(1).width = 18;
+    for (let i = 2; i <= header.length; i++) ws.getColumn(i).width = 14;
   }
 
   /**
    * GET /api/stats/tabela-liberacao/export
-   * Excel alinhado à tela (Card, Tipo, Total, colunas por dia).
+   * Excel: aba Conciliação (layout transposto detalhado) + aba Casos sem Fechamento.
    */
   router.get('/tabela-liberacao/export', async (req, res) => {
     try {
@@ -847,33 +1003,14 @@ function initStatsRoutes(connectToMongo) {
         return res.status(503).send('MongoDB não configurado');
       }
       const db = client.db('hub_ouvidoria');
-      const { dias, linhas } = await buildTabelaLiberacaoData(db, req);
+      const payload = await buildTabelaLiberacaoData(db, req);
 
       const wb = new ExcelJS.Workbook();
       wb.creator = 'Painel Tempo Real';
-      const ws = wb.addWorksheet('Conciliação', { views: [{ state: 'frozen', ySplit: 1 }] });
-      const headerRow = ['Card', 'Tipo', 'Total', ...dias.map((d) => fmtDiaExcelHeader(d))];
-      ws.addRow(headerRow);
-      ws.getRow(1).font = { bold: true };
-
-      linhas.forEach((row) => {
-        const pd = row.porDia || {};
-        const tot = row.totais || { ocorrencias: 0, liberados: 0 };
-        const sumO = tot.ocorrencias;
-        const sumL = tot.liberados;
-        const resumoDias = dias.map((d) => {
-          const o = pd[d]?.ocorrencias ?? 0;
-          const l = pd[d]?.liberados ?? 0;
-          return `${o}/${l}`;
-        });
-        ws.addRow([row.label, 'Resumo', `${sumO} / ${sumL}`, ...resumoDias]);
-        ws.addRow([row.label, 'Ocorrências', sumO, ...dias.map((d) => pd[d]?.ocorrencias ?? 0)]);
-        ws.addRow([row.label, 'Liberados', sumL, ...dias.map((d) => pd[d]?.liberados ?? 0)]);
-      });
-
-      ws.getColumn(1).width = 22;
-      ws.getColumn(2).width = 14;
-      ws.getColumn(3).width = 12;
+      const wsConc = wb.addWorksheet('Conciliação', { views: [{ state: 'frozen', ySplit: 2 }] });
+      escreverAbaConciliacaoExcel(wsConc, payload);
+      const wsSf = wb.addWorksheet('Casos sem Fechamento', { views: [{ state: 'frozen', ySplit: 1 }] });
+      escreverAbaSemFechamentoExcel(wsSf, payload);
 
       const stamp = DateTime.now().setZone('utc').toFormat('yyyyMMdd_HHmmss');
       const buffer = await wb.xlsx.writeBuffer();
@@ -916,7 +1053,7 @@ function initStatsRoutes(connectToMongo) {
   /**
    * GET /api/stats/tabela-liberacao
    * Query: dataInicio, dataFim, produto, motivo (igual GET /api/stats).
-   * Resposta: dias[] + linhas[] (porDia + totais por card).
+   * Resposta: dias[], cards[], matriz, totaisPorDia, totaisPorCard, casosSemFechamento.
    */
   router.get('/tabela-liberacao', async (req, res) => {
     try {
@@ -927,15 +1064,15 @@ function initStatsRoutes(connectToMongo) {
         return res.status(503).json({
           success: false,
           message: 'MongoDB não configurado: ' + err.message,
-          data: { dias: [], linhas: [] },
+          data: emptyTabelaLiberacaoPayload(),
         });
       }
       const db = client.db('hub_ouvidoria');
-      const { dias, linhas } = await buildTabelaLiberacaoData(db, req);
+      const data = await buildTabelaLiberacaoData(db, req);
 
       res.json({
         success: true,
-        data: { dias, linhas },
+        data,
       });
     } catch (error) {
       console.error('Erro ao buscar tabela liberação:', error);
@@ -943,7 +1080,7 @@ function initStatsRoutes(connectToMongo) {
         success: false,
         message: 'Erro ao buscar tabela de liberação',
         error: error.message,
-        data: { dias: [], linhas: [] },
+        data: emptyTabelaLiberacaoPayload(),
       });
     }
   });

@@ -1,7 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - FiltrosAuxiliar
- * VERSION: v1.2.9
+ * VERSION: v1.2.10
  *
+ * v1.2.10: buildQueryParamsStatsFromFiltrosHome + assinaturaFiltrosHomeParaStatsQuery — mesma query que GET /api/stats (home e Conciliação sem drift).
  * Seção de filtros compartilhada: início, fim, produto, motivo, Atualizar.
  * Grupo 2026 na API: Antecipação - 2026, Antecipação 2026. Grupo Outros: inclui produto literal "Antecipação".
  */
@@ -35,6 +36,31 @@ export function expandProdutosFiltroParaApi(selecionados) {
     else out.push(k);
   }
   return [...new Set(out)];
+}
+
+/**
+ * Parâmetros de query para GET /api/stats e rotas paritárias (`/api/stats/tabela-liberacao`, export Excel).
+ * Uma única função garante que a aba Conciliação não monte uma query diferente da home pelo modal de filtros.
+ */
+export function buildQueryParamsStatsFromFiltrosHome(f) {
+  const produtosApi = expandProdutosFiltroParaApi(f?.produtos || []);
+  return {
+    dataInicio: f?.dataInicio || undefined,
+    dataFim: f?.dataFim || undefined,
+    produtos: produtosApi.length ? produtosApi : undefined,
+    motivos: f?.motivos?.length ? f.motivos : undefined,
+  };
+}
+
+/** Assinatura estável dos params acima (React useMemo / comparações). */
+export function assinaturaFiltrosHomeParaStatsQuery(f) {
+  const p = buildQueryParamsStatsFromFiltrosHome(f);
+  return JSON.stringify({
+    dataInicio: p.dataInicio ?? '',
+    dataFim: p.dataFim ?? '',
+    produtos: p.produtos ?? [],
+    motivos: p.motivos ?? [],
+  });
 }
 
 const PRODUTOS = [

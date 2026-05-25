@@ -1,7 +1,8 @@
 /**
  * Painel Reclamações Tempo Real - API Service
- * VERSION: v1.4.15
+ * VERSION: v1.4.17
  *
+ * v1.4.17: tabela-liberacao — resposta matriz dia×tipo + casosSemFechamento; export Excel 2 abas.
  * v1.4.15: downloadConciliacaoTabelaExcel, downloadRelatorioOuvidoriaBaseExcel (GET export + relatorio base).
  * v1.4.14: tabela-liberacao — porDia.liberados (pixLiberado), não retirados.
  * v1.4.13: fetchStatsTabelaLiberacao — GET /api/stats/tabela-liberacao (mesmos query params que fetchStats).
@@ -119,7 +120,7 @@ export async function downloadConciliacaoTabelaExcel(params = {}) {
   await downloadExcelGet(`/api/stats/tabela-liberacao/export${qs ? `?${qs}` : ''}`, 'conciliacao_pix.xlsx');
 }
 
-/** Base ouvidoria (5 abas + timePortabilidade), paridade com script relatorioOuvidoria4AbasTotaisExcel + Time Port. */
+/** Base ouvidoria (5 abas de canal + Critérios), paridade com backend/scripts/relatorioOuvidoria4AbasTotaisExcel (incl. timePortabilidade). */
 export async function downloadRelatorioOuvidoriaBaseExcel(params = {}) {
   const qs = buildStatsQueryString(params);
   await downloadExcelGet(`/api/stats/relatorio-ouvidoria-base${qs ? `?${qs}` : ''}`, 'relatorio_ouvidoria_base.xlsx');

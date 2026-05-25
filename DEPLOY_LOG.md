@@ -2,6 +2,28 @@
 
 ## GitHub Push
 
+**Data/Hora:** 2026-05-25 11:30  
+**Tipo:** Push GitHub  
+**Versão:** `backend/routes/stats.js` v1.21.9 / `src/components/AbaTabelaLiberacao.js` v1.3.8 / `src/App.js` v1.4.16 / `src/components/FiltrosAuxiliar.js` v1.2.10 / `src/services/api.js` v1.4.17 / `backend/scripts/relatorioOuvidoria4AbasTotaisExcel.js` v1.8.0  
+**Repositório:** https://github.com/admVeloHub/TempoReal  
+**Branch:** main  
+
+### Arquivos modificados / incluídos
+- `backend/routes/stats.js` v1.21.9 — tabela-liberacao: matriz dia×tipo (UI transposta); `casosSemFechamento` (pixLiberado=true && !resolvido); dias UTC no intervalo do filtro; Excel com abas Conciliação + Casos sem Fechamento
+- `src/components/AbaTabelaLiberacao.js` v1.3.8 — pivot linhas=data/colunas=tipos; expansão por coluna; scroll 12 linhas; tabela Casos sem Fechamento com colunas tipo homogêneas (`table-fixed`); Total 3rem
+- `src/App.js` v1.4.16 — aba Conciliação com filtros globais (`refreshTrigger`)
+- `src/components/FiltrosAuxiliar.js` v1.2.10 — `buildQueryParamsStatsFromFiltrosHome` unificado para stats/Conciliação
+- `src/services/api.js` v1.4.17 — fetch/export alinhados ao novo payload
+- `backend/scripts/relatorioOuvidoria4AbasTotaisExcel.js` v1.8.0 — 5ª aba timePortabilidade; filtro opcional `CREATED_AT_HORA_MINIMA_SAO_PAULO` + coluna `criado_em_sp`
+- `DEPLOY_LOG.md` — este registro
+
+### Descrição
+Remodela a aba Conciliação (layout transposto, segunda tabela Casos sem Fechamento, filtros globais e export Excel em duas abas). Ajusta larguras da tabela sem fechamento e evolui o script CLI de relatório ouvidoria para 5 canais com filtro por hora de criação em São Paulo.
+
+---
+
+## GitHub Push
+
 **Data/Hora:** 2026-04-17 17:14  
 **Tipo:** Push GitHub  
 **Versão:** `src/App.js` v1.4.14  

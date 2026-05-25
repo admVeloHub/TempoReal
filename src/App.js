@@ -1,7 +1,9 @@
 /**
  * Painel Reclamações Tempo Real - App
- * VERSION: v1.4.14
+ * VERSION: v1.4.16
  *
+ * v1.4.16: Query da home usa buildQueryParamsStatsFromFiltrosHome (FiltrosAuxiliar) — paridade garantida com tabela Conciliação.
+ * v1.4.15: Modal Aplicar/Limpar incrementa refreshTrigger — aba Conciliação refaz GET com filtros novos (evita depender só do polling).
  * v1.4.14: Aba Conciliação — autorização por e-mail @velotax (lista explícita); não usa mais nome exibido.
  * v1.4.13: Aba Conciliação — tabela só via filtros globais (engrenagem); layout export/divisor na aba.
  * v1.4.12: Aba Conciliação — onFiltrosChange (período) sincroniza filtros globais + stats; rótulo "Conciliação".
@@ -30,8 +32,9 @@ import {
   PRODUTOS,
   MOTIVOS,
   MultiSelectDropdown,
-  expandProdutosFiltroParaApi,
   PRODUTO_CHAVE_GRUPO_ANTECIPACAO_2026,
+  buildQueryParamsStatsFromFiltrosHome,
+  assinaturaFiltrosHomeParaStatsQuery,
 } from './components/FiltrosAuxiliar';
 
 const POLL_INTERVAL_MS = 60000;
@@ -56,27 +59,6 @@ const DEFAULT_FILTROS = {
   dataFim: '',
 };
 const FILTROS_HOME_STORAGE_KEY = 'velohub.painelTempoReal.filtrosHome.v1';
-
-/** Query efetiva do GET /api/stats (home) + string estável para detectar filtro obsoleto após await. */
-function paramsStatsHomeDesdeFiltros(f) {
-  const produtosApi = expandProdutosFiltroParaApi(f?.produtos || []);
-  return {
-    dataInicio: f?.dataInicio || undefined,
-    dataFim: f?.dataFim || undefined,
-    produtos: produtosApi.length ? produtosApi : undefined,
-    motivos: f?.motivos?.length ? f.motivos : undefined,
-  };
-}
-
-function assinaturaParamsStatsHome(f) {
-  const p = paramsStatsHomeDesdeFiltros(f);
-  return JSON.stringify({
-    dataInicio: p.dataInicio ?? '',
-    dataFim: p.dataFim ?? '',
-    produtos: p.produtos ?? [],
-    motivos: p.motivos ?? [],
-  });
-}
 
 /** Cópia rasa para estado/React (arrays novos) — mesmo conteúdo que o modal envia ao Aplicar. */
 function snapshotFiltrosParaEstado(f) {
@@ -313,8 +295,8 @@ function App() {
     const mySeq = ++statsFetchSeqRef.current;
 
     const f = filtrosSnapshot ?? filtrosHomeRef.current;
-    const params = paramsStatsHomeDesdeFiltros(f);
-    const filtrosAssinatura = assinaturaParamsStatsHome(f);
+    const params = buildQueryParamsStatsFromFiltrosHome(f);
+    const filtrosAssinatura = assinaturaFiltrosHomeParaStatsQuery(f);
     const origemReq = filtrosSnapshot ? 'snapshot_modal' : 'ref_montagem_ou_poll';
 
     if (process.env.NODE_ENV === 'development') {
@@ -338,12 +320,12 @@ function App() {
         }
         return;
       }
-      if (assinaturaParamsStatsHome(filtrosHomeRef.current) !== filtrosAssinatura) {
+      if (assinaturaFiltrosHomeParaStatsQuery(filtrosHomeRef.current) !== filtrosAssinatura) {
         if (process.env.NODE_ENV === 'development') {
           // eslint-disable-next-line no-console
           console.debug('[STATS_FILTROS_HOME] descartado (filtro mudou durante o fetch)', {
             esperado: filtrosAssinatura,
-            atualRef: assinaturaParamsStatsHome(filtrosHomeRef.current),
+            atualRef: assinaturaFiltrosHomeParaStatsQuery(filtrosHomeRef.current),
           });
         }
         return;
@@ -551,6 +533,7 @@ function App() {
             filtrosHomeRef.current = snap;
             persistirFiltrosHome(snap);
             setFiltrosHome(snap);
+            setRefreshTrigger((t) => t + 1);
             setModalAberto(false);
             loadStats(snap);
           }}
@@ -559,6 +542,7 @@ function App() {
             filtrosHomeRef.current = snap;
             persistirFiltrosHome(snap);
             setFiltrosHome(snap);
+            setRefreshTrigger((t) => t + 1);
             setModalAberto(false);
             loadStats(snap);
           }}
